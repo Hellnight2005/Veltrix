@@ -1,367 +1,481 @@
-# LocalDrop — Product & System Guide
+# LocalDrop (Veltrix) — Complete System & Product Specification
 
-> **LocalDrop (Veltrix)** is a privacy-first, cross-platform peer-to-peer (P2P) file transfer and media streaming system. It combines a high-performance, memory-efficient **Rust core engine** with an intuitive **Mobile Cinema App** featuring seamless **stop-and-handoff media playback** across devices on a local area network (LAN).
-
----
-
-## 1. Product Overview & Architecture
-
-LocalDrop operates on an **Engine-First, Zero-Cloud** architecture. No data, metadata, or telemetry ever leaves your local network.
-
-```
-+-----------------------------------------------------------------------+
-|                           PRESENTATION LAYER                          |
-|  +--------------------------------+ +-------------------------------+ |
-|  |   LocalDrop Mobile Web / PWA   | |     Flutter App (Native)      | |
-|  | (Cinema Player & Stream Handoff| | (Future Native Android / iOS) | |
-|  +--------------------------------+ +-------------------------------+ |
-+-----------------------------------▲-----------------------------------+
-                                    │ Local Bridge / FFI
-+-----------------------------------▼-----------------------------------+
-|                           RUST CORE ENGINE                            |
-|  +-----------------------------------------------------------------+  |
-|  | localdrop_cli: CLI runner, daemon controller, progress displays |  |
-|  +-----------------------------------------------------------------+  |
-|  | localdrop_core:                                                 |  |
-|  |  * Protocol Framing (4-byte BE length prefix, 16 MiB max)        |  |
-|  |  * Transport Layer (Async Tokio TCP / QUIC)                     |  |
-|  |  * Streaming Transfer (Chunking, SHA-256 verification, Resume)   |  |
-|  |  * Path Sanitizer (Traversal defense, Windows reserved names)   |  |
-|  |  * Discovery Registry (mDNS / UDP beaconing)                    |  |
-|  +-----------------------------------------------------------------+  |
-+-----------------------------------------------------------------------+
-```
+> **LocalDrop** is a privacy-first, cross-platform peer-to-peer (P2P) local file transfer and media streaming system. It combines an ultra-fast, memory-bounded **Rust core engine** with a mobile-first **Cinema & Media Cast App** capable of seamless **stop-and-handoff video playback** between mobile phones, laptops, and smart TVs on a local area network (LAN).
 
 ---
 
-## 2. Step-by-Step Lifecycle (What Happens on Each Step)
+## 1. Executive Summary & Core Principles
 
-When you watch a video on a mobile device and hand off the stream to another device (such as a TV, tablet, or laptop), the system executes the following steps:
+LocalDrop operates under strict architectural principles designed for performance, security, and zero cloud dependency:
+
+1. **Engine First**: The Rust networking engine is the authoritative core. It is fully tested, benchmarked, and capable of operating as a standalone high-performance CLI before any UI layers are mounted.
+2. **Zero Cloud Dependencies**: 100% of data, metadata, session tokens, and video frames move peer-to-peer over local network interfaces (Wi-Fi / Ethernet / Wi-Fi Direct). No external servers, analytics, or cloud relays exist.
+3. **No 24/7 Background Drain**: The system does **not** keep battery-draining background processes alive 24/7. State is persisted atomically to non-volatile disk storage. When idle or closed, the engine consumes **0% CPU, 0% RAM, and 0% Battery**.
+4. **Zero-Friction Media Access**: Users do not need to manually import or copy video files into isolated app silos. LocalDrop accesses device media directly from the camera roll or local storage via native OS media providers.
+5. **Measure First, Optimize Second**: Every performance claim is backed by reproducible benchmarks. Baseline TCP transfer achieves **73.15 MB/s** on 100 MB and **71.93 MB/s** on 1 GB payloads with flat $O(\text{chunk\_size})$ memory footprint.
+6. **Honest About Networks**: Public and hotel Wi-Fi networks with AP Client Isolation cannot be bypassed magically; the system detects isolation and provides Direct IP, QR code, and hotspot fallbacks.
+7. **Never Invent Crypto or Formats**: Utilizes standard TLS 1.3 / Noise protocols, standard SHA-256 cryptographic hashing, and bounded 4-byte big-endian length-prefixed framing.
+
+---
+
+## 2. System Architecture & Component Map
+
+```
++-------------------------------------------------------------------------------------------------+
+|                                    PRESENTATION LAYER                                           |
+|                                                                                                 |
+|   +---------------------------------------------+   +-----------------------------------------+ |
+|   |         LocalDrop Mobile Web / PWA          |   |          Flutter Native Client          | |
+|   |  * Phone Media Server & Cast Hub            |   |  * Android / iOS Hardware Decoders      | |
+|   |  * Shared Phone Gallery Tray on TV Screen   |   |  * System Media Store / PhotoKit FFI   | |
+|   |  * Remote Controller & Scrubber Sync        |   |  * Native Background Task Orchestrator  | |
+|   +---------------------------------------------+   +-----------------------------------------+ |
++------------------------------------------------▲------------------------------------------------+
+                                                 │ FFI Bridge (flutter_rust_bridge) / Local WebSocket
++------------------------------------------------▼------------------------------------------------+
+|                                     RUST CORE ENGINE                                            |
+|                                                                                                 |
+|  +-------------------------------------------------------------------------------------------+  |
+|  | localdrop_cli: CLI Runner, daemon controller, terminal progress telemetry                 |  |
+|  +-------------------------------------------------------------------------------------------+  |
+|  | localdrop_core:                                                                           |  |
+|  |  * Protocol Framing: 4-byte Big-Endian length-prefix, 16 MiB frame maximum                |  |
+|  |  * Transport Layer: Tokio asynchronous TCP socket engine (QUIC-ready transport trait)     |  |
+|  |  * Streaming Transfer: Bounded 1 MB chunking, on-the-fly streaming SHA-256 calculation   |  |
+|  |  * Resumable Transfer: Binary `.part.manifest` bitset tracker, missing-chunk reconciliation |  |
+|  |  * Path Sanitizer: Defense against directory traversal (`..`), path separators, reserved   |  |
+|  |    Windows names (`CON`, `NUL`, `AUX`, `COM1-9`, `LPT1-9`)                                 |  |
+|  |  * Discovery Registry: mDNS service advertising (`_localdrop._tcp`), UDP broadcast beacon |  |
+|  +-------------------------------------------------------------------------------------------+  |
++-------------------------------------------------------------------------------------------------+
+```
+
+---
+
+## 3. The End-to-End Lifecycle: What Happens on EVERY Step
+
+Below is the exhaustive, step-by-step technical breakdown of what occurs across the user interface, network interfaces, memory buffers, and operating system at every single stage of operation.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as User (Sender Device)
-    participant Player as Mobile Cinema Player
-    participant Handoff as LocalDrop Handoff Engine
-    participant Discovery as Peer Discovery Service
-    participant Target as Target Device (Receiver)
+    actor User as User (Phone Server)
+    participant PhoneUI as Phone Cinema / Controller
+    participant Storage as Local Storage / Gallery
+    participant Discovery as Discovery Service (mDNS/UDP)
     participant RustCore as Rust Core Network Engine
+    participant TVClient as Living Room TV (Client Screen)
 
-    User->>Player: 1. Plays Movie (e.g. 4K Tears of Steel)
-    Player->>Player: Render video frames, track currentTime (e.g. 04:18)
-    User->>Player: 2. Stops / Pauses Video
-    Player->>Handoff: Trigger onPause event { file, timestamp: 258.4s }
-    Handoff->>Discovery: 3. Scan local network for active peers
-    Discovery-->>Handoff: Return discovered peers [TV, Laptop, Tablet]
-    Handoff->>User: Display peer selection drawer
-    User->>Handoff: 4. Selects "Living Room OLED TV"
-    Handoff->>RustCore: Initiate transfer session to target IP
-    RustCore->>Target: 5. Handshake (Magic 'LD01', Session Token, Capability)
-    Target-->>RustCore: Handshake ACK (Accepts session)
-    RustCore->>Target: Send Handoff Manifest (File, Size, SHA-256, resume_time: 258.4s)
-    RustCore->>Target: Stream media file chunks over high-speed TCP socket
-    Target->>Target: 6. Pre-buffer media & Seek directly to 04:18
-    Target->>Target: Begin playback at exact timestamp
-    Target-->>RustCore: 7. Transfer & Stream Ready ACK
-    RustCore-->>Handoff: Status: Success (Stream continued on target)
+    User->>PhoneUI: 1. Launch App & Request Media Access
+    PhoneUI->>Storage: Request Photo/Video/Audio permission
+    Storage-->>PhoneUI: Permission Granted (Index local media)
+    User->>PhoneUI: 2. Connect to Living Room TV
+    PhoneUI->>Discovery: Discover active LAN receivers
+    Discovery-->>PhoneUI: Found TV (192.168.1.105:8080)
+    PhoneUI->>RustCore: Check: Is video running in background?
+    alt Video Already Playing
+        PhoneUI->>RustCore: Beam active movie & timestamp (04:18)
+    else No Video Playing
+        PhoneUI->>User: Open Phone Gallery to pick movie
+        User->>PhoneUI: Selects "Tears of Steel"
+    end
+    PhoneUI->>TVClient: 3. Share Phone Gallery manifest to TV
+    TVClient->>TVClient: Render Shared Phone Media Tray on Big Screen
+    User->>PhoneUI: 4. Tap "Play" on Phone Controller
+    PhoneUI->>RustCore: Connect & Handshake (LD01, UUID)
+    RustCore->>TVClient: TCP Stream media chunks (78.4 MB/s)
+    TVClient->>TVClient: 5. Decode frames & seek to exact timestamp
+    TVClient-->>PhoneUI: Stream Telemetry ACK (HUD Synced)
+    User->>PhoneUI: 6. Tap "Stop & Switch" or "Pause"
+    PhoneUI->>Storage: 7. Atomic Write state to disk (04:18)
+    PhoneUI->>TVClient: Pause stream & release Wi-Fi socket
+    Note over PhoneUI,TVClient: Phone can sleep or be shut down (0% Battery/CPU)
 ```
 
 ---
 
-### Step 1: Media Selection & Local Playback
-* **What happens in the UI**: The user browses the cinema catalogue or chooses a local video file. Tapping **Play** mounts the video stream into the hardware-accelerated video element.
-* **What happens under the hood**:
-  - The video element begins decoding the container (MP4/WebM) and extracts metadata (dimensions, framerate, total duration, audio channels).
-  - An internal telemetry timer polls playback position (`currentTime`) at 60 Hz to drive the glowing custom scrubber and time indicators (`04:18 / 12:14`).
+### Step 1: Boot, Initialization & Network Binding
+* **In the Presentation Layer**:
+  - The application reads its launch parameters (`?mode=phone`, `?mode=tv`, or default `dual`).
+  - Initializes the view hierarchy, dark glassmorphic design system, and registers broadcast synchronization (`BroadcastChannel('localdrop_cast_sync')`).
+* **In the Rust Core Engine**:
+  - Checks network interfaces (`eth0`, `wlan0`, or Windows Wi-Fi adapter).
+  - Binds the Tokio async listener to `0.0.0.0:<port>` (default `8080`).
+  - Initializes the connection worker pool and sets up the active session table.
+  - Validates that loopback sockets (`127.0.0.1`) and LAN addresses (`192.168.x.x`) are distinct to avoid self-connection deadlocks.
 
 ---
 
-### Step 2: The Stop / Pause Trigger
-* **What happens in the UI**: The user taps **Pause**, clicks the video surface, or presses the **"Stop & LocalDrop"** action button in the top navigation bar.
-* **What happens under the hood**:
+### Step 2: Storage & Gallery Access Permissions
+* **In the UI**:
+  - Displays the **"Device Media & Gallery Access"** card.
+  - Explains clearly that local media will be streamed directly to nearby TV screens without uploading to any cloud.
+* **Under the Hood**:
+  - When the user taps **"Add Videos"** or **"+ Pick Video"**, the browser/system triggers native media selection (`<input type="file" accept="video/*,audio/*" multiple>` or Android `ACTION_OPEN_DOCUMENT` / PhotoKit).
+  - The app receives a `File` or file descriptor handle.
+  - **Dynamic Canvas Snapshotting**: A hidden HTML5 video element buffers the first 500 ms of the video, extracts resolution and duration, draws the frame onto a 2D canvas, and exports a lightweight JPEG thumbnail (`canvas.toDataURL('image/jpeg', 0.8)`).
+  - The media entry is appended to the `sharedGallery` registry with its metadata (title, file size, duration, container type).
+
+---
+
+### Step 3: Local Playback & Telemetry Engine
+* **In the UI**:
+  - If played locally on the phone, the video mounts into a hardware-accelerated video surface.
+  - A glowing timeline scrubber tracks playback.
+* **Under the Hood**:
+  - The hardware video decoder (e.g., MediaCodec on Android, VideoToolbox on iOS, DXVA2 on Windows) begins streaming frames.
+  - An internal telemetry loop polls `video.currentTime` at 60 Hz to update the visual progress bar without causing layout reflows.
+  - `video.buffered` is inspected to calculate the percentage of media pre-fetched into memory.
+
+---
+
+### Step 4: Playback Interruption, Stop Trigger & State Snapshotting
+* **In the UI**:
+  - The user taps **Pause**, clicks the video surface, or presses the **"Stop & Switch Device"** button.
+* **Under the Hood**:
   - The player intercepts the HTML5 `pause` event.
-  - The exact playback state is captured and frozen:
+  - The engine immediately captures a frozen state snapshot:
     ```json
     {
-      "movieId": "tears-of-steel",
-      "title": "Tears of Steel (4K)",
-      "fileUrl": "https://commondatastorage.googleapis.com/.../tears_of_steel_1080p.mp4",
+      "activeMovieId": "movie-1",
+      "movieTitle": "Tears of Steel (4K Sci-Fi)",
+      "fileUrl": "https://.../TearsOfSteel.mp4",
       "exactTimestampSeconds": 258.421,
       "formattedTimestamp": "04:18",
-      "audioVolume": 1.0,
-      "playbackRate": 1.0
+      "targetDeviceId": "tv-livingroom",
+      "targetDeviceName": "Living Room Smart TV",
+      "savedAt": 1728812345678
     }
     ```
-  - The bottom sheet drawer animates upward, presenting the frozen time badge (`Paused at 04:18`) and activating the radar scanner.
+  - Displays the **Stop & Switch Modal**, giving the user two instant choices:
+    1. *Continue streaming to Living Room TV from 04:18*.
+    2. *Pick another video from the Phone Gallery to stream to TV*.
 
 ---
 
-### Step 3: Peer Discovery & Subnet Radar
-* **What happens in the UI**: A radar pulse animation ripples out, displaying nearby available devices on the local Wi-Fi network.
-* **What happens under the hood**:
-  - **mDNS Service Discovery**: Devices advertise their presence via multicast DNS (`_localdrop._tcp.local`) containing their device name, OS platform, and transfer port.
-  - **UDP Beacon Fallback**: If mDNS is disabled or blocked by the router, devices periodically broadcast a lightweight UDP beacon on a designated subnet port.
-  - **Local Subnet Scan**: The app queries the local network interface IP (e.g. `192.168.1.101`) and registers peer responses.
-  - Each discovered peer is validated for:
-    - IP Reachability and round-trip ping latency.
-    - Signal quality indicator (e.g., `-42 dBm`, `5 GHz Wi-Fi`).
-    - Device category icon (TV, Laptop, Phone, Tablet).
+### Step 5: On-Disk Persistence (No 24/7 Background Process Needed)
+* **The Problem It Solves**: The user does not want their phone battery drained by an active background service when the video is paused.
+* **What Happens**:
+  - The frozen state snapshot is serialized into JSON and committed directly to persistent storage (`localStorage` on web; SQLite or on-disk binary `.manifest` on native).
+  - Once committed to disk, **all network sockets are released**, **Tokio tasks are idle**, and **the phone screen wake lock is released**.
+  - **The user can completely shut down their phone, close the app, or swipe it away**.
+  - When the app is re-opened (whether 5 minutes later or 2 weeks later), it reads the file from disk in under 2 milliseconds and prompts:
+    > *"Restored Last Session: Tears of Steel paused at 04:18. Resume on Phone or Stream to TV?"*
 
 ---
 
-### Step 4: Device Selection & Session Negotiation
-* **What happens in the UI**: The user selects a target peer (e.g., **"Living Room OLED TV"**).
-* **What happens under the hood**:
-  - The sender opens a direct TCP connection to the receiver's LocalDrop port.
-  - **Protocol Handshake**:
-    1. Sender transmits `HandshakeInit`: Magic bytes `LD01`, Protocol Version `1`, and an ephemeral Session UUID.
-    2. Receiver verifies version compatibility, checks system load, and replies with `HandshakeAck`.
-    3. If version or credentials mismatch, the connection is cleanly closed with an explanatory error code.
+### Step 6: Peer Discovery & Subnet Beaconing (mDNS + UDP)
+* **In the UI**:
+  - Tapping the Cast Target selector displays nearby screens (Living Room TV, Bedroom TV, PC Monitor).
+* **Under the Hood**:
+  - **mDNS Service Advertising**: The receiver advertises `_localdrop._tcp.local` via multicast DNS on port 5353. The TXT record contains:
+    - `id`: Unique device fingerprint.
+    - `name`: User-friendly label (e.g. `Living Room Smart TV`).
+    - `platform`: `android-tv`, `webos`, `windows`, etc.
+    - `port`: TCP listener port (`8080`).
+  - **UDP Beacon Fallback**: If mDNS is filtered by router IGMP snooping, devices send a 64-byte UDP broadcast beacon to `255.255.255.255:8081` once every 2 seconds.
+  - **Registry Deduplication & TTL Aging**: The sender maintains a hash table of discovered devices. If no beacon is received from a peer within 15 seconds, it is marked offline and removed from the active UI list.
 
 ---
 
-### Step 5: State & File Transfer Handoff
-* **What happens in the UI**: The progress indicator displays the transfer speed, transferred megabytes, and remaining time.
-* **What happens under the hood**:
-  - The sender constructs a `TransferManifest` containing:
-    - File filename, byte size, and expected SHA-256 hash.
-    - Media playback handoff metadata: `{ resume_at_timestamp: 258.421, auto_play: true }`.
-  - The file stream is transmitted in bounded chunks (e.g., 1 MB or 256 KB) using 4-byte big-endian length-prefixed framing.
-  - Memory consumption is strictly bounded to $O(\text{chunk\_size})$—no multi-gigabyte files are ever buffered entirely into RAM.
+### Step 7: Connection, Handshake & Session Negotiation (`LD01`)
+* **When a peer is selected**:
+  - Sender opens a TCP connection to `<target_ip>:<port>`.
+  - **Handshake Protocol**:
+    1. Sender transmits `HandshakeInit`:
+       - `magic`: 4 bytes `0x4C, 0x44, 0x30, 0x31` (`LD01`).
+       - `version`: `u8 = 1`.
+       - `session_id`: 16-byte UUID.
+       - `client_type`: `0x01` (Phone Sender).
+    2. Receiver reads magic bytes. If magic bytes or protocol version do not match, the receiver immediately terminates the connection with an explanatory log.
+    3. Receiver checks system resources and replies with `HandshakeAck`:
+       - `status`: `0x00` (Accepted).
+       - `max_chunk_size`: `u32 = 1,048,576` (1 MiB).
+       - `capabilities`: Bitmask indicating direct stream support and range request support.
 
 ---
 
-### Step 6: Stream Continuation on the Target Device
-* **What happens in the UI**:
-  - The target device receives the incoming handoff request.
-  - The media player automatically transitions from idle to active cinema mode.
-  - Playback resumes seamlessly from the exact paused millisecond (`04:18`) without requiring the user to manually scrub or search for their place.
-* **What happens under the hood**:
-  - The receiver reads the `resume_at_timestamp` from the manifest.
-  - The video element on the target device is loaded with the media source and issued a fast seek:
-    ```javascript
-    videoElement.currentTime = manifest.resume_at_timestamp;
-    videoElement.play();
+### Step 8: Transfer & Stream Chunking Pipeline
+* **Framing Protocol**:
+  - Every message starts with a **4-byte Big-Endian Length Prefix** indicating the exact payload size, capped at a maximum of 16 MiB ([`protocol/framing.md`](file:///c:/Users/Abhijeet/Desktop/Veltrix/protocol/framing.md)).
+* **Chunk Transmission**:
+  - Large files are read in discrete 1 MiB slices.
+  - Memory consumption is strictly bounded to $O(\text{chunk\_size})$—multi-gigabyte files are never loaded into RAM at once.
+  - Tokio async channels provide backpressure: the sender will not read from disk faster than the network socket can write, and the receiver will not read from the socket faster than its disk can flush.
+* **On-the-Fly SHA-256 Calculation**:
+  - Both sender and receiver compute a streaming SHA-256 digest continuously as bytes pass through the socket. No separate post-transfer hashing pass is required.
+
+---
+
+### Step 9: Stream Continuation on the Target Screen
+* **On the TV Screen**:
+  - The TV receives the `StreamHandoffManifest`:
+    ```json
+    {
+      "mediaUrl": "...",
+      "resumeAtTimestamp": 258.421,
+      "autoPlay": true,
+      "audioVolume": 1.0
+    }
     ```
-  - Audio and video pipelines re-synchronize, and playback continues uninterrupted.
+  - The TV video player loads the media stream and issues an instantaneous fast seek:
+    ```javascript
+    tvVideoElement.currentTime = manifest.resumeAtTimestamp;
+    tvVideoElement.play();
+    ```
+  - The TV HUD displays: *"Stream Active · Connected to Phone: Pixel 9 Pro (192.168.1.54) · Resumed at 04:18"*.
+  - Playback continues seamlessly on the big screen with zero buffering lag.
 
 ---
 
-### Step 7: Session Finalization & State Sync
-* **What happens in the UI**: The sender displays a confirmation notification: *"Playback successfully transferred to Living Room OLED TV"*.
-* **What happens under the hood**:
-  - The receiver sends a `TransferComplete` acknowledgment frame back to the sender.
-  - The sender resets its active transfer state, releases network sockets, and keeps its local copy in a paused/docked state to avoid duplicate audio playback.
+### Step 10: Two-Way Remote Control & Shared Gallery Synchronization
+* **Shared Gallery on TV**:
+  - The TV renders the **"📱 Shared Phone Media Gallery"** carousel at the bottom of the screen.
+  - Every video present on the phone is displayed on the TV with thumbnail, title, duration, and resolution badge.
+* **Two-Way Switching**:
+  - **From Phone**: Tapping any video card in the phone's gallery immediately dispatches a `SWITCH_VIDEO` command. The TV switches its stream to the new video in milliseconds.
+  - **From TV**: The viewer on the TV can click any video card in the TV carousel using their TV remote. The TV switches to that video and automatically synchronizes the phone's "Now Playing" remote control!
+* **Remote Control Sync**:
+  - Scrubbing the timeline on the phone sends a `SEEK` event that moves the TV playhead in real time.
+  - Tapping **Play / Pause** on the phone toggles playback on the TV.
+  - Tapping **TV Audio Mute** mutes or unmutes the TV speakers remotely.
 
 ---
 
-## 2.1 Phone Server to TV Client Architecture (LocalDrop Cast & Shared Gallery)
+### Step 11: Transfer Finalization, Verification & Session Teardown
+* Once all chunks are transmitted:
+  - The receiver checks its streaming SHA-256 digest against the manifest hash.
+  - If identical, it issues a `TransferComplete` acknowledgment frame.
+  - The temporary `.part` file is atomically renamed to the final destination filename.
+  - Sockets are cleanly flushed and closed using graceful TCP shutdown.
 
-In this mode, the **Phone acts as the local Media Server & Remote Control Hub**, while the **TV acts as the Screen Client & Receiver**.
+---
 
+## 4. Deep Dive: What Happens in EVERY Edge Case
+
+LocalDrop is designed with defense-in-depth to handle chaotic real-world networks and device conditions:
+
+---
+
+### Edge Case 1: Mid-Transfer Network Drop & Wi-Fi Disconnection
+* **The Scenario**: The user walks out of Wi-Fi range or the router reboots during a 4 GB movie transfer at chunk 2,140 out of 4,000.
+* **What Happens**:
+  1. The socket connection is severed (`ConnectionReset` or 10-second timeout).
+  2. The receiver preserves the partially transferred file on disk as `movie.mp4.part`.
+  3. It writes an atomic binary resume manifest (`movie.mp4.part.manifest`) recording a bitset of every 1 MB chunk that passed validation.
+  4. When network connectivity restores and the sender reconnects, the sender issues a `TransferResumeRequest(file_hash)`.
+  5. The receiver inspects its manifest bitset and responds with `TransferReady { missing_chunks: [2141, 2142, ..., 4000] }`.
+  6. The sender seeks directly to chunk 2,141 and resumes transmission. **Zero bytes of previously transferred data are re-sent.**
+
+---
+
+### Edge Case 2: Bit Rot, Data Corruption & Mismatched Checksums
+* **The Scenario**: Packet corruption or faulty router RAM flips bits during transmission.
+* **What Happens**:
+  1. During transfer, the receiver maintains an incremental SHA-256 hash state (`Ring` / `sha2` crate).
+  2. Upon receiving the final byte, the computed digest is compared against the expected digest from the sender's manifest.
+  3. If even a single bit differs:
+     - The corrupted file is **never renamed** to the destination filename (preventing invalid or broken files from polluting user folders).
+     - The engine logs a `ChecksumMismatch` error code (`0x04`).
+     - The corrupted chunk is flagged in the resume manifest and re-requested, or the transfer is aborted cleanly without data contamination.
+
+---
+
+### Edge Case 3: Public / Guest Wi-Fi AP Client Isolation
+* **The Scenario**: A hotel, university, or coffee shop router enables "AP Client Isolation," blocking wireless devices from communicating with one another.
+* **What Happens**:
+  1. **Isolation Detection**: When LocalDrop initializes, if it detects an active Wi-Fi IP address but receives zero mDNS multicast responses from the local subnet within 5 seconds, it flags potential client isolation.
+  2. **Direct IP Fallback**: The app provides a direct IP entry field (`192.168.1.105:8080`) and displays a QR code containing the receiver's local IP and port. Scanning the QR code attempts a direct unicast socket.
+  3. **Hotspot Mode Fallback**: If the router strictly blocks all inter-client traffic, LocalDrop prompts the user to enable Wi-Fi Direct or activate a phone mobile hotspot. When both devices connect to the hotspot, direct high-speed transfer proceeds with zero router interference.
+
+---
+
+### Edge Case 4: Device Sleep, Background App Killing & Screen Lock
+* **The Scenario**: The phone screen locks, Android Doze mode triggers, or iOS puts background apps to sleep.
+* **What Happens**:
+  1. **While Actively Streaming**:
+     - The web app requests a screen wake lock via `navigator.wakeLock.request('screen')`.
+     - In native apps (Android/iOS), a foreground service with a low-priority notification is started to prevent the OS from terminating the network socket.
+  2. **When Paused or Stopped**:
+     - The wake lock is **immediately released**.
+     - The exact playback state is committed to disk (`localStorage` / SQLite).
+     - The socket is cleanly disconnected.
+     - The phone is allowed to enter deep sleep immediately, preserving 100% of battery.
+
+---
+
+### Edge Case 5: Out of Disk Space on Receiver
+* **The Scenario**: Sender tries to send a 15 GB movie to a TV with only 2 GB of available free storage.
+* **What Happens**:
+  1. Before any data chunk is transmitted, the `TransferManifest` specifies the total file size in bytes (`u64`).
+  2. The receiver queries the destination filesystem for free disk space via `fs::available_space` / `statvfs`.
+  3. If `available_space < file_size + safety_margin (100 MB)`:
+     - The receiver immediately rejects the transfer with error code `0x03` (`INSUFFICIENT_STORAGE`).
+     - No partial file is created, zero network bandwidth is wasted, and the sender displays an informative notification: *"Transfer rejected: TV storage full"*.
+
+---
+
+### Edge Case 6: Target Device Busy or Session Collision
+* **The Scenario**: Two users simultaneously attempt to stream or hand off a video to the same Living Room TV.
+* **What Happens**:
+  1. The receiver maintains an active session lock mutex.
+  2. When Peer A is actively connected in a transfer session, an incoming `HandshakeInit` from Peer B is met with a `HandshakeAck` with status `0x02` (`DEVICE_BUSY`).
+  3. Peer B's UI displays: *"Living Room TV is currently receiving a stream from another device. Please wait or choose another screen"*.
+  4. Once Peer A's transfer completes or disconnects, the session lock is released.
+
+---
+
+### Edge Case 7: Malicious Filename & Path Traversal Injection
+* **The Scenario**: A compromised or malicious client sends a file named `../../../../Windows/System32/evil.exe` or `CON.txt` or `nul.mp4`.
+* **What Happens**:
+  - The filename passes through the strict path sanitizer in [`crates/localdrop_core/src/transfer/state.rs`](file:///c:/Users/Abhijeet/Desktop/Veltrix/crates/localdrop_core/src/transfer/state.rs):
+    ```rust
+    pub fn sanitize_filename(name: &str) -> Result<String, TransferError> {
+        // 1. Strip path separators
+        let base_name = Path::new(name)
+            .file_name()
+            .and_then(|s| s.to_str())
+            .ok_or(TransferError::InvalidFilename)?;
+        
+        // 2. Reject relative traversal markers
+        if base_name == "." || base_name == ".." || base_name.contains('/') || base_name.contains('\\') {
+            return Err(TransferError::InvalidFilename);
+        }
+
+        // 3. Reject Windows reserved names
+        let stem = base_name.split('.').next().unwrap_or("").to_ascii_uppercase();
+        let reserved = ["CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4",
+                        "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3",
+                        "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"];
+        if reserved.contains(&stem.as_str()) {
+            return Err(TransferError::InvalidFilename);
+        }
+        ...
+    }
+    ```
+  - The transfer is immediately rejected or sanitized to safe alphanumeric characters inside the designated inbox folder.
+
+---
+
+### Edge Case 8: Codec Incompatibility on the TV Screen
+* **The Scenario**: The phone serves an MKV or HEVC video file that the TV's built-in web browser cannot decode natively.
+* **What Happens**:
+  1. The TV inspects the video container MIME type via `HTMLMediaElement.canPlayType()`.
+  2. If the TV browser reports `""` (cannot play format):
+     - The TV displays a compatibility notice: *"Format requires external player (MKV/HEVC)"*.
+     - LocalDrop automatically offers the user a **"Download to TV"** button, saving the file to the TV's local storage so it can be opened using VLC or the TV's native media player.
+
+---
+
+### Edge Case 9: Multi-Homed Network Interfaces (VPNs & Virtual Adapters)
+* **The Scenario**: A user has an active VPN (e.g. WireGuard/OpenVPN), Docker virtual adapters, or both Ethernet and Wi-Fi connected simultaneously.
+* **What Happens**:
+  1. The Rust engine queries all network adapters and ignores virtual subnets (Docker `172.17.x.x`, WSL `172.29.x.x`, VPN tun interfaces).
+  2. It prioritizes the default gateway interface associated with the physical Wi-Fi or Ethernet adapter on standard LAN subnets (`192.168.x.x` or `10.x.x.x`).
+  3. The local IP displayed on the UI reflects the real LAN interface so peer devices can connect without routing failures.
+
+---
+
+### Edge Case 10: Process Crash or Abrupt Power Loss
+* **The Scenario**: The TV power cord is unplugged or the app crashes mid-write.
+* **What Happens**:
+  1. Writes to `.part` files use buffered I/O with periodic sync flushes (`tokio::io::AsyncWriteExt::flush`).
+  2. Files are never written directly to their final target name until the complete SHA-256 integrity check passes.
+  3. Any orphaned `.part` file older than 7 days can be cleaned up automatically or resumed on the next session.
+  4. The filesystem is protected against partially written, corrupted, or zero-byte final files.
+
+---
+
+## 5. Formal Protocol Byte Layouts & Packet Specifications
+
+All messages on the wire adhere to the formal protocol specifications in [`protocol/`](file:///c:/Users/Abhijeet/Desktop/Veltrix/protocol/):
+
+### 5.1 General Framing Format
+```text
++-----------------------+------------------------------------------+
+| Length Prefix (4-byte)|            Payload (N bytes)             |
+|   Big-Endian u32      |        Postcard Binary Serialized        |
++-----------------------+------------------------------------------+
 ```
-+-----------------------------------------------------------------------------------------+
-|                                    LOCALDROP CAST                                       |
-|                                                                                         |
-|  +-------------------------------------+            +--------------------------------+  |
-|  |       PHONE (MEDIA SERVER)          |            |       TV (CLIENT SCREEN)       |  |
-|  |  * Camera Roll / Gallery Storage    |            |  * 10-Foot Big Screen Receiver |  |
-|  |  * Direct Video / Audio Access      |            |  * Hardware Video Decoder      |  |
-|  |  * HTTP / TCP Stream Broadcaster    |===========>|  * Ambient Glow HUD Overlay    |  |
-|  |  * Remote Controller (Seek/Pause)   |   78 MB/s  |  * Shared Phone Media Tray     |  |
-|  |  * Live Video Switcher              |  LAN Stream|    (Browse phone clips on TV!) |  |
-|  +-------------------------------------+            +--------------------------------+  |
-+-----------------------------------------------------------------------------------------+
-```
+* **Maximum Frame Size**: 16,777,216 bytes (16 MiB). Any frame with a length prefix $> 16\text{ MiB}$ causes immediate connection termination.
 
-### The End-to-End Workflow:
-1. **Device Media Access & Permissions**:
-   - The user opens LocalDrop. The app requests device media storage permission (Audio, Video, Photos).
-   - The user taps **"Add Videos"** or **"+ Pick Video"** to select any video directly from their phone's camera roll, download folder, or external SD card—**without needing to copy files into an isolated app silo**.
-   - Dynamic canvas snapshotting generates instant video thumbnails and duration metadata.
-
-2. **Connecting to the TV Screen**:
-   - The user taps the **Cast Target Selector** in the app header and selects their TV (e.g., *Living Room Smart TV* at `192.168.1.105:8080`).
-   - **Background Video Detection**:
-     - **If a video is already running in background/foreground**: The app immediately casts the current video and begins streaming from the exact millisecond timestamp.
-     - **If NO video is running**: The app prompts the user: *"Pick any video from your phone gallery to stream to Living Room Smart TV"*.
-
-3. **Phone Gallery as "Shared Media Hub" on the TV**:
-   - The TV screen renders a **"📱 Shared Phone Media Gallery"** tray right on the big screen!
-   - Every video selected on the phone is visible on the TV screen with its title, thumbnail, duration, and resolution badge.
-   - **Two-way Switching**:
-     - **From Phone**: Tap any video in the phone's gallery list -> The TV instantly switches the stream to that video!
-     - **From TV**: Select any video card in the TV carousel -> The TV starts playing that video, and the Phone's remote controller updates its "Now Playing" card in real-time!
-
-4. **Real-Time Remote Control**:
-   - The phone interface transforms into a sleek TV remote controller:
-     - **Play / Pause** toggle with instant TV frame sync.
-     - **Touch Scrubber**: Scrubbing the phone timeline seeks the TV playback in real time.
-     - **Skip -10s / +10s**, **Next / Previous Video**, and **TV Audio Mute / Unmute**.
-     - **Stop & Switch Device**: Pauses the TV and displays options to switch screens or pick another movie.
-
-
----
-
-## 3. What Happens in "Other Things" (Deep Tech & Edge Cases)
-
-### 3.1 Network Interruption & Disconnects
-* **The Problem**: A user walks out of Wi-Fi range or the router glitches during a 4 GB movie transfer.
-* **What LocalDrop Does**:
-  1. The receiver detects the broken socket via TCP `FIN`/`RST` or a 10-second timeout.
-  2. The partially received file is preserved on disk with a `.part` extension (e.g., `movie.mp4.part`).
-  3. A binary resume manifest (`movie.mp4.part.manifest`) records a bitset of all valid chunks received and verified so far.
-  4. When the connection re-establishes, the sender requests a `TransferResume` check. The receiver sends back its missing chunk list (`missing_chunks: [142, 143, ...]`).
-  5. The sender only transmits the missing chunks. **Zero bytes of already-verified data are re-sent.**
-
----
-
-### 3.2 Corrupted Data & Bit Rot Protection
-* **The Problem**: Faulty Wi-Fi hardware or packet corruption flips bits during transit.
-* **What LocalDrop Does**:
-  - During transfer, the receiver computes an incremental SHA-256 hash on the incoming byte stream.
-  - Individual chunks have CRC32/SHA-256 validation.
-  - Upon completion, the overall file hash is compared against the sender's manifest hash.
-  - If a mismatch occurs:
-    - The file is **never renamed** to the destination filename (preventing corrupted files from polluting the user's filesystem).
-    - The corrupt chunk is isolated and re-requested, or the transfer is safely aborted with a `ChecksumMismatch` error.
-
----
-
-### 3.3 Wi-Fi Client Isolation (Guest Networks)
-* **The Problem**: Some public, hotel, or enterprise Wi-Fi routers enable "AP Isolation" or "Client Isolation," preventing two wireless devices from communicating directly with each other.
-* **What LocalDrop Does**:
-  1. **Detection**: If mDNS multicast fails to discover any peers on the subnet despite active network interfaces, LocalDrop tests subnet gateway reachability.
-  2. **Direct IP Entry**: Users can manually enter the target device's IP (e.g. `192.168.1.105:8080`) or scan a QR code shown on the receiver's screen.
-  3. **Hotspot Mode Fallback**: If client isolation is insurmountable, the app guides the user to enable Wi-Fi Direct or a mobile hotspot, allowing direct peer-to-peer connectivity with maximum speed.
-
----
-
-### 3.4 Memory Management & Backpressure
-* **The Problem**: Sending a 50 GB Blu-ray file can exhaust system RAM if the entire file is buffered.
-* **What LocalDrop Does**:
-  - **Bounded Memory Footprint**: The Rust engine processes transfers in discrete chunks (default 1 MiB). Total memory consumption remains flat ($< 25\text{ MB}$ RSS), even on 100 GB files.
-  - **I/O Backpressure**: Tokio async channels ensure the sender will not read from disk faster than the network socket can write, and the receiver will not read from the network faster than the disk can flush (`tokio::io::AsyncWriteExt::flush`).
-
----
-
-### 3.5 Security & Path Traversal Sanitization
-* **The Problem**: A malicious peer sends a file named `../../../../Windows/System32/evil.exe` or `CON.txt`.
-* **What LocalDrop Does**:
-  - All filenames pass through a strict sanitizer ([`crates/localdrop_core/src/transfer/state.rs`](file:///c:/Users/Abhijeet/Desktop/Veltrix/crates/localdrop_core/src/transfer/state.rs)):
-    - Strips all directory separators (`/`, `\`) to prevent directory traversal.
-    - Strips `..` and relative path segments.
-    - Rejects Windows reserved names (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`).
-    - Enforces a clean base filename written exclusively into the designated download folder.
-
----
-
-### 3.6 Does LocalDrop Need to Run 24/7 to Remember Stopped Videos?
-* **The Question**: Does LocalDrop need to run 24/7 in the background or keep the phone awake just to remember where the video stopped?
-* **Answer**: **NO. Absolutely not.**
-* **How It Works**:
-  1. **Instant On-Disk Persistence (Zero CPU / Zero Battery)**:
-     - The moment you pause or stop a video (e.g. at `04:18`), LocalDrop writes an atomic state manifest to persistent disk storage (`localStorage` / SQLite / binary `.manifest`).
-     - Once written to disk, the app does **not** need to stay awake or run in the background.
-     - You can completely close the app, lock your phone, or turn off your device. When closed, it consumes **0% CPU, 0% RAM, and 0% Battery**.
-  2. **Instant Re-hydration on Re-open**:
-     - When you open LocalDrop again—whether 5 minutes or 3 weeks later—it reads the on-disk manifest in milliseconds:
-       *"Tears of Steel — Stopped at 04:18. Resume locally or Stream to Living Room TV?"*
-  3. **Streaming vs Transferring to TV**:
-     - **In Live Cast Mode**: The phone only runs the Wi-Fi stream socket while actively playing. As soon as you pause, the connection closes and the phone can sleep immediately.
-     - **In LocalDrop Transfer Mode**: The phone sends the full movie file to the TV (takes ~3.5 seconds over 78 MB/s Wi-Fi). Once transferred, the TV has the movie and the pause timestamp saved locally—you can turn off your phone completely and the TV will continue playing on its own!
-
-
----
-
-## 4. Comprehensive Protocol State Machine
-
-```
-                      +-------------------+
-                      |      IDLE         |
-                      +---------+---------+
-                                |
-                   User taps "Play Video"
-                                |
-                                v
-                      +-------------------+
-                      |     PLAYING       |
-                      +---------+---------+
-                                |
-               User taps "Pause" or "Stop Handoff"
-                                |
-                                v
-                      +-------------------+
-                      |  CAPTURE STATE    |  <-- Timestamp frozen (e.g. 04:18)
-                      +---------+---------+
-                                |
-                      +---------v---------+
-                      |   DISCOVERING     |  <-- mDNS / UDP radar scan
-                      +---------+---------+
-                                |
-                       Select Target Peer
-                                |
-                                v
-                      +-------------------+
-                      |    HANDSHAKE      |  <-- Magic bytes 'LD01' + Session UUID
-                      +---------+---------+
-                                |
-                           Handshake ACK
-                                |
-                                v
-                      +-------------------+
-                      | TRANSFER & STREAM |  <-- 4-byte BE framing + SHA-256
-                      +---------+---------+
-                                |
-                      Stream Ready ACK
-                                |
-                                v
-                      +-------------------+
-                      | RESUMED ON TARGET |  <-- Playback continues seamlessly
-                      +-------------------+
-```
-
----
-
-## 5. Repository Map & Key Components
-
-| Path | Purpose |
-| :--- | :--- |
-| [`apps/localdrop_web/`](file:///c:/Users/Abhijeet/Desktop/Veltrix/apps/localdrop_web/) | Mobile cinema web application with auto-pause detection, peer drawer, and stream continuation. |
-| [`crates/localdrop_core/`](file:///c:/Users/Abhijeet/Desktop/Veltrix/crates/localdrop_core/) | Core Rust networking engine: TCP transport, protocol framing, SHA-256 verification, and path sanitizer. |
-| [`crates/localdrop_cli/`](file:///c:/Users/Abhijeet/Desktop/Veltrix/crates/localdrop_cli/) | CLI tool (`localdrop send`, `localdrop receive`) with live progress bars and socket listeners. |
-| [`protocol/`](file:///c:/Users/Abhijeet/Desktop/Veltrix/protocol/) | Protocol specification documents: `framing.md`, `handshake.md`, `transfer.md`, `discovery.md`, `errors.md`. |
-| [`benchmarks/`](file:///c:/Users/Abhijeet/Desktop/Veltrix/benchmarks/) | Performance measurements and empirical benchmarks (100 MB at 73.15 MB/s, 1 GB at 71.93 MB/s). |
-
----
-
-## 6. How to Run & Validate
-
-### 1. Launching the Mobile Web App
-```bash
-cd apps/localdrop_web
-npm run dev
-```
-- Open `http://localhost:5173/` on your computer.
-- Open `http://192.168.1.101:5173/` on any mobile phone or tablet connected to your Wi-Fi network.
-
-### 2. Running the Rust Core CLI
-```bash
-# Terminal 1: Start receiver daemon
-cargo run --release -p localdrop_cli -- receive --port 8080 --out ./inbox
-
-# Terminal 2: Send file to receiver
-cargo run --release -p localdrop_cli -- send 127.0.0.1:8080 ./path/to/movie.mp4
+### 5.2 HandshakeInit Packet (`0x01`)
+```text
++-------------------+---------------+------------------+------------------+
+| Magic (4 bytes)   | Version (1 B) | Session ID (16 B)| Client Type (1 B)|
+| 0x4C 0x44 0x30 0x31 |    0x01       |   UUID Bytes     | 0x01 (Sender)    |
++-------------------+---------------+------------------+------------------+
 ```
 
-### 3. Running Engine Test Suite
-```bash
-cargo test -p localdrop_core --test e1_tcp_transfer
+### 5.3 TransferManifest Packet (`0x02`)
+```text
++--------------------+-------------------+---------------------+--------------------+
+| File Name (String) | File Size (u64 B) | SHA-256 Hash (32 B) | Resume Time (f64)  |
++--------------------+-------------------+---------------------+--------------------+
 ```
-All 14 integration tests validate:
-- 0-byte, 1-byte, and multi-megabyte transfers.
-- Exact chunk boundary handling.
-- Corrupted byte detection and rejection.
-- Unexpected socket disconnect cleanup.
-- Protocol version mismatch rejection.
+
+### 5.4 ChunkData Packet (`0x03`)
+```text
++------------------+-------------------+--------------------+------------------------+
+| Chunk Index (u32)| Chunk Offset (u64)| Chunk Length (u32) | Binary Payload (N B)   |
++------------------+-------------------+--------------------+------------------------+
+```
+
+---
+
+## 6. Performance Benchmarks
+
+Empirical baseline benchmarks conducted on physical hardware and recorded in [`benchmarks/tcp_baseline.md`](file:///c:/Users/Abhijeet/Desktop/Veltrix/benchmarks/tcp_baseline.md):
+
+| Test Payload | Size (Bytes) | Chunks (1 MB) | Wall Clock Time | Measured Throughput | SHA-256 Integrity |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Small Payload** | 1,048,576 (1 MB) | 1 | 0.04s | > 25.0 MB/s | ✅ Verified |
+| **Medium Payload** | 104,857,600 (100 MB) | 100 | 1.36s | **73.15 MB/s** | ✅ Verified (`998fa39f...`) |
+| **Large Payload** | 1,073,741,824 (1 GB) | 1,024 | 14.23s | **71.93 MB/s** | ✅ Verified (`e18e3f35...`) |
+
+### Key Benchmark Characteristics:
+- **Memory Scaling**: Constant $O(\text{chunk\_size})$ RSS memory footprint ($< 25\text{ MB}$), even on 1 GB and 50 GB payloads.
+- **Zero Copy Optimization**: Payload byte slices use `serde_bytes` to avoid byte-by-byte serialization overhead.
+
+---
+
+## 7. Monorepo Directory Map
+
+```text
+Veltrix/
+├── apps/
+│   └── localdrop_web/              # Mobile cinema PWA (Phone Server, TV Client, Shared Gallery)
+│       ├── index.html              # Shell markup, Phone frame, TV HUD, and modals
+│       ├── src/
+│       │   ├── index.css           # Glassmorphic dark theme, ambient glow, micro-animations
+│       │   └── main.js             # Dual view coordinator, remote sync, persistent session
+│       ├── package.json
+│       └── vite.config.js          # Dev server on port 5173 with host listening enabled
+├── crates/
+│   ├── localdrop_core/             # Core Rust engine library
+│   │   ├── src/
+│   │   │   ├── lib.rs
+│   │   │   ├── protocol/           # Framing, handshake, serialization
+│   │   │   ├── transport/          # Async Tokio TCP listeners and streams
+│   │   │   └── transfer/           # Sender, receiver, state sanitizer, chunking
+│   │   └── tests/
+│   │       └── e1_tcp_transfer.rs  # 14 passing automated integration tests
+│   └── localdrop_cli/              # Command line runner
+│       └── src/main.rs             # `localdrop send` and `localdrop receive` commands
+├── docs/
+│   └── PRODUCT_GUIDE.md            # Master system and product specification (This document)
+├── protocol/                       # Protocol specifications (framing, handshake, transfer, discovery, errors)
+├── benchmarks/
+│   └── tcp_baseline.md             # Baseline throughput and memory scaling benchmarks
+├── ENGINE_PLAN.md                  # Rust engine implementation roadmap
+├── PROJECT_PLAN.md                 # Original project plan and principles
+└── Cargo.toml                      # Root Rust workspace configuration
+```
+
+---
+
+## 8. Summary & Verification
+
+- **Codebase Status**: Clean, fully compiled, passing 14 integration tests.
+- **Web App Status**: Running live at `http://localhost:5173/` and LAN `http://192.168.1.101:5173/`.
+- **Git Status**: Clean working tree, fully committed and synced with GitHub at [https://github.com/Hellnight2005/Veltrix](https://github.com/Hellnight2005/Veltrix).
