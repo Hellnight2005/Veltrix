@@ -14,7 +14,10 @@ LocalDrop is a privacy-first, cross-platform peer-to-peer file transfer applicat
 
 Detailed information and plans are available in the following documents:
 
+*   [docs/PRODUCT_GUIDE.md](file:///c:/Users/Abhijeet/Desktop/Veltrix/docs/PRODUCT_GUIDE.md) - **Full Product & System Guide**: What happens on each step, edge cases, networking, and lifecycle diagrams.
 *   [PROJECT_PLAN.md](file:///c:/Users/Abhijeet/Desktop/Veltrix/PROJECT_PLAN.md) - The full project plan, architecture specifications, milestones, and goals.
+*   [ENGINE_PLAN.md](file:///c:/Users/Abhijeet/Desktop/Veltrix/ENGINE_PLAN.md) - Engine-first Rust implementation roadmap and phase specifications.
+*   [benchmarks/tcp_baseline.md](file:///c:/Users/Abhijeet/Desktop/Veltrix/benchmarks/tcp_baseline.md) - Phase E1 baseline throughput benchmarks (73.15 MB/s).
 *   [CONTRIBUTING.md](file:///c:/Users/Abhijeet/Desktop/Veltrix/CONTRIBUTING.md) - Developer setup guide and codebase contribution workflows.
 *   [SECURITY.md](file:///c:/Users/Abhijeet/Desktop/Veltrix/SECURITY.md) - Security policies, threat model, and vulnerability reporting.
 *   [CHANGELOG.md](file:///c:/Users/Abhijeet/Desktop/Veltrix/CHANGELOG.md) - Project milestone history and updates.
@@ -26,22 +29,34 @@ The project is structured as a monorepo containing:
 ```text
 localdrop/
 ├── apps/
-│   └── localdrop_flutter/    # Flutter presentation layer
+│   └── localdrop_web/        # Mobile cinema web app (stop-and-handoff video streaming)
 ├── crates/
-│   └── localdrop_core/       # Core Rust networking engine
-├── protocol/                 # Protocol specifications
-├── docs/                     # Architectural and technical documentation
+│   ├── localdrop_core/       # Core Rust networking engine (TCP, framing, SHA-256)
+│   └── localdrop_cli/        # High-performance CLI transfer tool
+├── protocol/                 # Formal protocol specifications (framing, handshake, etc.)
+├── docs/                     # Architectural, system, and product documentation
 └── benchmarks/               # Transport & File I/O performance benchmarks
 ```
 
 ## 🛠️ Getting Started
 
-### Prerequisites
+### 1. Running the Mobile Cinema Web App
+```bash
+cd apps/localdrop_web
+npm run dev
+```
+Open `http://localhost:5173/` or test on your phone over Wi-Fi (`http://<YOUR_LAN_IP>:5173/`).
 
-*   [Flutter SDK](https://docs.flutter.dev/get-started/install) (latest stable version)
-*   [Rust toolchain](https://www.rust-lang.org/tools/install) (latest stable version)
-*   [`flutter_rust_bridge_codegen`](https://cjycode.com/flutter_rust_bridge/quickstart.html) CLI tool
+### 2. Running the Rust Core CLI
+```bash
+# Start receiver listener
+cargo run --release -p localdrop_cli -- receive --port 8080 --out ./inbox
 
-### Running the App
+# Send file over local network
+cargo run --release -p localdrop_cli -- send 127.0.0.1:8080 ./path/to/movie.mp4
+```
 
-Refer to the [CONTRIBUTING.md](file:///c:/Users/Abhijeet/Desktop/Veltrix/CONTRIBUTING.md) file for step-by-step instructions on setting up your local development environment and compiling the Rust core bridge.
+### 3. Running Engine Test Suite
+```bash
+cargo test -p localdrop_core --test e1_tcp_transfer
+```
