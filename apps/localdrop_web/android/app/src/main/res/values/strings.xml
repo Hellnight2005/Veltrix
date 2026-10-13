@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">LocalDrop</string>
+    <string name="title_activity_main">LocalDrop</string>
+    <string name="package_name">com.localdrop.veltrix</string>
+    <string name="custom_url_scheme">com.localdrop.veltrix</string>
+</resources>

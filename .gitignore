@@ -22,3 +22,10 @@ Thumbs.db
 # Web dependencies and build
 node_modules/
 dist/
+
+# Android Gradle build artifacts
+apps/localdrop_web/android/.gradle/
+apps/localdrop_web/android/app/build/
+apps/localdrop_web/android/build/
+apps/localdrop_web/android/capacitor-cordova-android-plugins/build/
+
