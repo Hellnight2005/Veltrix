@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="description" content="LocalDrop Mobile Cinema — Peer-to-peer video streaming and seamless playback handoff to nearby local network devices.">
-  <meta name="theme-color" content="#0b0f19">
-  <title>LocalDrop Cinema · Peer-to-Peer Stream & Handoff</title>
+  <meta name="description" content="LocalDrop Cast & Stream Handoff — Use your phone as a local media server to stream gallery videos to your TV client with real-time switching and handoff.">
+  <meta name="theme-color" content="#070a12">
+  <title>LocalDrop Cast · Phone Server to TV Client</title>
   
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,431 +15,400 @@
   <link rel="stylesheet" href="./src/index.css">
 </head>
 <body class="dark-theme">
-  <!-- Desktop Frame Shell Toggle -->
+  <!-- Top Navigation & View Mode Switcher -->
   <header class="app-top-banner" id="appTopBanner">
     <div class="banner-content">
       <div class="brand-pill">
         <span class="pulse-dot"></span>
-        <span class="brand-name">LocalDrop Engine</span>
-        <span class="proto-tag">TCP v1.0</span>
+        <span class="brand-name">LocalDrop Cast</span>
+        <span class="proto-tag">P2P LAN Server</span>
       </div>
-      <div class="view-controls">
-        <button id="btnToggleMobileFrame" class="btn-ghost-sm" title="Toggle Phone Frame preview">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="20" x="5" y="2" rx="3"/><path d="M12 18h.01"/></svg>
-          <span id="frameToggleLabel">Device Frame: ON</span>
+
+      <!-- Mode Selector Tabs: Phone, TV, Dual -->
+      <div class="mode-switch-group">
+        <button id="btnModePhone" class="mode-btn active-mode" title="View Phone Server & Remote Controller">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="20" x="5" y="2" rx="3"/><path d="M12 18h.01"/></svg>
+          <span>📱 Phone (Server)</span>
         </button>
-        <button id="btnSwitchDeviceRole" class="btn-primary-sm" title="Switch between Sender and Receiver preview">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/></svg>
-          <span id="roleLabel">Preview Receiver Mode</span>
+        <button id="btnModeTV" class="mode-btn" title="View TV Screen Receiver">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="15" x="2" y="3" rx="2"/><path d="M12 18v4"/><path d="M8 22h8"/></svg>
+          <span>📺 TV (Client)</span>
+        </button>
+        <button id="btnModeDual" class="mode-btn" title="Side-by-side simulation of Phone streaming to TV">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="8" height="16" x="2" y="4" rx="2"/><rect width="10" height="12" x="12" y="6" rx="2"/><path d="M10 12h2"/></svg>
+          <span>⚡ Dual View (Phone + TV)</span>
+        </button>
+      </div>
+
+      <div class="view-controls">
+        <button id="btnToggleMobileFrame" class="btn-ghost-sm" title="Toggle Phone Shell Container">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="20" x="5" y="2" rx="3"/><path d="M12 18h.01"/></svg>
+          <span id="frameToggleLabel">Shell: ON</span>
         </button>
       </div>
     </div>
   </header>
 
-  <!-- Main Mobile Container -->
-  <main class="mobile-viewport-container" id="mobileViewportContainer">
-    <div class="mobile-device-shell" id="mobileDeviceShell">
-      
-      <!-- Mobile Status Bar -->
-      <div class="mobile-status-bar" id="mobileStatusBar">
-        <span class="status-time" id="statusClock">12:45</span>
-        <div class="phone-speaker-notch"></div>
-        <div class="status-indicators">
-          <svg class="icon-wifi" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/></svg>
-          <span class="signal-tag">LAN 5G</span>
-          <span class="battery-tag">98%</span>
-        </div>
-      </div>
-
-      <!-- Sender App View (Primary) -->
-      <section class="screen-view active-view" id="senderView">
+  <!-- Root Viewport Layout Container -->
+  <main class="main-workspace-container" id="mainWorkspaceContainer">
+    
+    <!-- ========================================================================= -->
+    <!-- 1. PHONE SERVER VIEW (Mobile Device Serving Media & Remote Controller)   -->
+    <!-- ========================================================================= -->
+    <section class="phone-column-wrapper" id="phoneColumnWrapper">
+      <div class="mobile-device-shell" id="mobileDeviceShell">
         
-        <!-- App Bar -->
-        <div class="screen-header">
-          <div class="user-device-badge">
-            <div class="device-avatar">📱</div>
-            <div class="device-text">
-              <span class="device-label">My Device</span>
-              <span class="device-sub" id="myDeviceIp">Pixel 9 Pro · 192.168.1.54</span>
-            </div>
+        <!-- Mobile Status Bar -->
+        <div class="mobile-status-bar" id="mobileStatusBar">
+          <span class="status-time" id="statusClock">16:45</span>
+          <div class="phone-speaker-notch"></div>
+          <div class="status-indicators">
+            <svg class="icon-wifi" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/></svg>
+            <span class="signal-tag">5G Wi-Fi</span>
+            <span class="battery-tag">97%</span>
           </div>
-          <button class="icon-btn-round" id="btnOpenRadar" title="Discover nearby LocalDrop devices">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/><circle cx="12" cy="12" r="2"/></svg>
-            <span class="badge-dot"></span>
-          </button>
         </div>
 
-        <!-- Video Player Container -->
-        <section class="player-section">
-          <div class="video-card-container">
-            <div class="video-wrapper" id="videoWrapper">
-              <video id="mainVideoPlayer" preload="metadata" playsinline>
-                <!-- Default demo source: Tears of Steel open source clip -->
+        <!-- Phone App Viewport -->
+        <div class="phone-app-viewport">
+          
+          <!-- App Header with Target Device Cast Dropdown -->
+          <div class="phone-header">
+            <div class="phone-user-info">
+              <span class="role-badge">📡 Phone Media Server</span>
+              <span class="device-ip-badge" id="phoneServerIp">192.168.1.54:8080</span>
+            </div>
+
+            <!-- Cast Target Selector Dropdown -->
+            <button class="cast-target-btn" id="btnCastTargetSelector" title="Select TV or Screen Client">
+              <div class="cast-icon-wrap" id="castIconWrap">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/><line x1="2" x2="2.01" y1="20" y2="20"/></svg>
+              </div>
+              <div class="cast-btn-text">
+                <span class="cast-target-name" id="selectedTargetDeviceName">Living Room Smart TV</span>
+                <span class="cast-target-status" id="castStatusLabel">Connected · Ready</span>
+              </div>
+              <svg class="arrow-down" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+          </div>
+
+          <!-- Storage & Media Access Permission Card -->
+          <section class="permission-access-card" id="permissionAccessCard">
+            <div class="permission-icon-box">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+            </div>
+            <div class="permission-content">
+              <div class="permission-title-row">
+                <h4 class="permission-title">Device Media & Gallery Access</h4>
+                <span class="permission-status-tag" id="permissionStatusTag">Active</span>
+              </div>
+              <p class="permission-desc">Phone streams videos, audio & movie files from your local storage directly to the TV screen.</p>
+            </div>
+            <button class="btn-grant-access" id="btnPickGalleryDirect" title="Pick Video from Phone Storage">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+              <span>Add Videos</span>
+            </button>
+            <input type="file" id="phoneMediaFileInput" accept="video/*,audio/*" multiple style="display: none;">
+          </section>
+
+          <!-- Streaming State Card / Phone Video Player -->
+          <section class="stream-control-card" id="streamControlCard">
+            
+            <!-- Video Preview Container on Phone -->
+            <div class="phone-video-container" id="phoneVideoContainer">
+              <video id="phoneVideoPlayer" preload="metadata" playsinline muted>
                 <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4" type="video/mp4">
-                Your browser does not support video playback.
               </video>
 
-              <!-- Video Overlay State (play/pause pulse) -->
-              <div class="video-overlay" id="videoOverlay">
-                <div class="overlay-play-btn" id="overlayPlayBtn">
-                  <svg id="overlayPlayIcon" width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              <!-- Video Overlay State -->
+              <div class="phone-video-overlay" id="phoneVideoOverlay">
+                <div class="overlay-play-round" id="phoneOverlayPlayBtn">
+                  <svg id="phoneOverlayIcon" width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                 </div>
               </div>
 
               <!-- Top Bar Over Video -->
-              <div class="video-top-bar" id="videoTopBar">
-                <div class="video-title-pill">
-                  <span class="pill-dot"></span>
-                  <span id="currentMovieTitle">Tears of Steel · 1080p Sci-Fi</span>
+              <div class="phone-video-topbar">
+                <span class="active-badge" id="phoneActiveBadge">● Serving to TV</span>
+                <span class="movie-pill" id="phoneNowPlayingTitle">Tears of Steel (4K)</span>
+              </div>
+
+              <!-- Stream Timeline Scrubber -->
+              <div class="phone-scrubber-box">
+                <div class="phone-scrubber-track" id="phoneScrubberTrack">
+                  <div class="phone-scrubber-fill" id="phoneScrubberFill"></div>
+                  <div class="phone-scrubber-thumb" id="phoneScrubberThumb"></div>
                 </div>
-                <button class="btn-glass-icon" id="btnFilePickerTrigger" title="Open Local Movie from Device">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                <div class="phone-time-row">
+                  <span id="phoneTimeCurrent">00:00</span>
+                  <span id="phoneTimeDuration">12:14</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- TV Remote Controls Bar on Phone -->
+            <div class="tv-remote-bar">
+              <div class="remote-action-buttons">
+                <button class="remote-btn" id="phoneBtnPrev" title="Previous Video">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" x2="5" y1="19" y2="5"/></svg>
                 </button>
-                <input type="file" id="localVideoFileInput" accept="video/mp4,video/webm,video/ogg,video/quicktime,video/x-matroska" style="display: none;">
+                <button class="remote-btn" id="phoneBtnSkipBack" title="Skip -10s">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 17l-5-5 5-5"/><path d="M18 17l-5-5 5-5"/></svg>
+                </button>
+                <button class="remote-btn-primary" id="phoneBtnPlayPause" title="Play / Pause on TV">
+                  <svg id="phonePlayPauseIcon" width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                </button>
+                <button class="remote-btn" id="phoneBtnSkipForward" title="Skip +10s">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 17l5-5-5-5"/><path d="M6 17l5-5-5-5"/></svg>
+                </button>
+                <button class="remote-btn" id="phoneBtnNext" title="Next Video">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" x2="19" y1="5" y2="19"/></svg>
+                </button>
               </div>
 
-              <!-- Custom Video Controls Floating Bar -->
-              <div class="video-controls-bar" id="videoControlsBar">
-                <!-- Scrubber Progress -->
-                <div class="scrubber-track" id="scrubberTrack">
-                  <div class="scrubber-buffered" id="scrubberBuffered"></div>
-                  <div class="scrubber-fill" id="scrubberFill"></div>
-                  <div class="scrubber-thumb" id="scrubberThumb"></div>
-                </div>
-
-                <!-- Bottom Row Controls -->
-                <div class="controls-row">
-                  <div class="controls-left">
-                    <button class="ctrl-btn" id="btnPlayPause" title="Play/Pause">
-                      <svg id="playPauseIcon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    </button>
-                    <button class="ctrl-btn" id="btnSkipBack" title="Skip -10s">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 17l-5-5 5-5"/><path d="M18 17l-5-5 5-5"/></svg>
-                    </button>
-                    <button class="ctrl-btn" id="btnSkipForward" title="Skip +10s">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 17l5-5-5-5"/><path d="M6 17l5-5-5-5"/></svg>
-                    </button>
-                    <span class="time-display" id="timeDisplay">00:00 / 12:14</span>
-                  </div>
-
-                  <div class="controls-right">
-                    <!-- LocalDrop Direct Handoff Trigger -->
-                    <button class="btn-handoff-pill" id="btnDirectHandoff" title="Transfer / Cast Stream to LocalDrop device">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-                      <span>Handoff</span>
-                    </button>
-
-                    <button class="ctrl-btn" id="btnSpeedToggle" title="Playback speed">
-                      <span id="speedLabel">1.0x</span>
-                    </button>
-                    <button class="ctrl-btn" id="btnFullscreenToggle" title="Fullscreen">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
-                    </button>
-                  </div>
-                </div>
+              <!-- Quick Stream Stop / Handoff Trigger -->
+              <div class="remote-secondary-row">
+                <button class="btn-stop-handoff" id="btnPhoneStopHandoff">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect width="14" height="14" x="5" y="5" rx="2"/></svg>
+                  <span>Stop & Switch Device</span>
+                </button>
+                <button class="btn-volume-pill" id="btnPhoneMuteToggle">
+                  <svg id="phoneVolumeIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                  <span id="phoneVolumeLabel">TV Audio: ON</span>
+                </button>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        <!-- Movie Selector / Library Section -->
-        <section class="library-section">
-          <div class="section-title-row">
-            <h2 class="section-heading">Now Playing & Library</h2>
-            <button class="btn-text-link" id="btnCustomFileClick">+ Open File</button>
-          </div>
-          
-          <div class="movie-cards-scroll">
-            <article class="movie-card active-card" data-video="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4" data-title="Tears of Steel (Sci-Fi 1080p)" data-duration="734" id="cardMovie1">
-              <div class="card-thumb sci-fi-thumb">
-                <span class="card-badge">Sci-Fi</span>
-                <span class="card-len">12:14</span>
+          <!-- Phone Media Gallery (Shared with TV) -->
+          <section class="phone-gallery-section">
+            <div class="gallery-header-row">
+              <div class="gallery-title-group">
+                <h3 class="gallery-heading">📱 Phone Gallery (Shared with TV)</h3>
+                <p class="gallery-sub">Tap any video to switch what plays on the TV</p>
               </div>
-              <div class="card-info">
-                <h3 class="card-title">Tears of Steel</h3>
-                <p class="card-desc">1080p · Stereo · 284 MB</p>
-              </div>
-            </article>
-
-            <article class="movie-card" data-video="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" data-title="Big Buck Bunny (4K Animation)" data-duration="596" id="cardMovie2">
-              <div class="card-thumb bunny-thumb">
-                <span class="card-badge">Animation</span>
-                <span class="card-len">09:56</span>
-              </div>
-              <div class="card-info">
-                <h3 class="card-title">Big Buck Bunny</h3>
-                <p class="card-desc">4K · Surround · 410 MB</p>
-              </div>
-            </article>
-
-            <article class="movie-card" data-video="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4" data-title="Elephants Dream (Classic)" data-duration="653" id="cardMovie3">
-              <div class="card-thumb elephants-thumb">
-                <span class="card-badge">Cinema</span>
-                <span class="card-len">10:53</span>
-              </div>
-              <div class="card-info">
-                <h3 class="card-title">Elephants Dream</h3>
-                <p class="card-desc">1080p · Spatial · 320 MB</p>
-              </div>
-            </article>
-          </div>
-        </section>
-
-        <!-- Quick Transfer Banner -->
-        <section class="quick-status-card" id="quickStatusCard">
-          <div class="status-icon-box">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><path d="M12 2v20"/><path d="m17 5-5-3-5 3"/><path d="m17 19-5 3-5-3"/><circle cx="12" cy="12" r="3"/></svg>
-          </div>
-          <div class="status-content">
-            <h4 class="status-title">Auto-Handoff Ready</h4>
-            <p class="status-desc">Pausing video will prompt instant stream handoff to nearby LocalDrop peers.</p>
-          </div>
-          <button class="btn-scan-sm" id="btnScanNearbyBar">Scan</button>
-        </section>
-      </section>
-
-      <!-- Receiver Screen View (Simulation of Target Device Receiving Stream) -->
-      <section class="screen-view" id="receiverView">
-        <div class="screen-header receiver-header">
-          <div class="user-device-badge">
-            <div class="device-avatar tv-avatar">📺</div>
-            <div class="device-text">
-              <span class="device-label">Living Room Smart TV</span>
-              <span class="device-sub">LocalDrop Receiver · 192.168.1.105:8080</span>
+              <button class="btn-pick-more" id="btnUploadMoreGallery">+ Pick Video</button>
             </div>
-          </div>
-          <span class="status-chip active-chip">Listening</span>
+
+            <!-- Dynamic List of Phone Videos -->
+            <div class="phone-gallery-list" id="phoneGalleryList">
+              <!-- Rendered via JavaScript -->
+            </div>
+          </section>
+
+          <!-- Bottom Navigation Bar -->
+          <nav class="phone-bottom-nav">
+            <button class="phone-nav-item active-nav" id="pNavCinema">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect width="14" height="14" x="1" y="5" rx="2" ry="2"/></svg>
+              <span>Server</span>
+            </button>
+            <button class="phone-nav-item" id="pNavGallery">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+              <span>Gallery</span>
+            </button>
+            <button class="phone-nav-item" id="pNavDevices">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="15" x="2" y="3" rx="2"/><path d="M12 18v4"/><path d="M8 22h8"/></svg>
+              <span>TVs & Screens</span>
+            </button>
+          </nav>
         </div>
+      </div>
+    </section>
 
-        <!-- Receiver Active Cinema Player -->
-        <section class="player-section receiver-player-section">
-          <div class="video-card-container">
-            <div class="video-wrapper">
-              <video id="receiverVideoPlayer" preload="metadata" playsinline muted>
-                <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4" type="video/mp4">
-              </video>
-              
-              <!-- Receiver Overlay Notice -->
-              <div class="receiver-active-banner" id="receiverActiveBanner">
-                <span class="pulse-emerald"></span>
-                <span id="receiverStreamStatusText">Stream Active · Handed off from Pixel 9 Pro</span>
-              </div>
+    <!-- ========================================================================= -->
+    <!-- 2. STREAM PIPELINE BEAM (Visible in Dual View)                            -->
+    <!-- ========================================================================= -->
+    <div class="stream-beam-connector" id="streamBeamConnector">
+      <div class="beam-line">
+        <div class="beam-pulse-particle"></div>
+      </div>
+      <div class="beam-meta-card">
+        <span class="beam-speed-badge" id="beamSpeedBadge">78.4 MB/s</span>
+        <span class="beam-proto-badge">TCP LAN Stream</span>
+        <span class="beam-sha-badge" id="beamShaBadge">SHA-256 Verified</span>
+      </div>
+    </div>
 
-              <!-- Stream Timeline Marker -->
-              <div class="receiver-timeline-badge" id="receiverTimelineBadge">
-                <span>Resumed at: <strong id="receiverResumeStamp">04:18</strong></span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- Live Transfer Stream Velocity Monitor -->
-        <section class="stream-stats-panel" id="streamStatsPanel">
-          <h3 class="panel-heading">LocalDrop Stream Telemetry</h3>
-          
-          <div class="telemetry-grid">
-            <div class="telemetry-item">
-              <span class="telemetry-label">Throughput</span>
-              <span class="telemetry-val" id="telemetryThroughput">78.4 MB/s</span>
-            </div>
-            <div class="telemetry-item">
-              <span class="telemetry-label">Transport</span>
-              <span class="telemetry-val">TCP (Direct LAN)</span>
-            </div>
-            <div class="telemetry-item">
-              <span class="telemetry-label">Buffer Chunks</span>
-              <span class="telemetry-val" id="telemetryChunks">14 / 284</span>
-            </div>
-            <div class="telemetry-item">
-              <span class="telemetry-label">SHA-256 Hash</span>
-              <span class="telemetry-val mono-val" id="telemetryHash">998fa39f...</span>
-            </div>
-          </div>
-
-          <div class="progress-bar-container">
-            <div class="progress-bar-label">
-              <span>Streaming Buffer Progress</span>
-              <span id="streamProgressPercent">48%</span>
-            </div>
-            <div class="progress-track">
-              <div class="progress-fill" id="streamProgressFill" style="width: 48%;"></div>
-            </div>
-          </div>
-
-          <button class="btn-return-sender" id="btnReturnToSender">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
-            <span>Return to Phone View</span>
-          </button>
-        </section>
-      </section>
-
-      <!-- Bottom Navigation Bar -->
-      <nav class="mobile-bottom-nav" id="mobileBottomNav">
-        <button class="nav-item active-nav" id="navItemCinema">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect width="14" height="14" x="1" y="5" rx="2" ry="2"/></svg>
-          <span>Cinema</span>
-        </button>
-        <button class="nav-item" id="navItemDevices">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
-          <span>Devices</span>
-        </button>
-        <button class="nav-item" id="navItemTransfers">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
-          <span>Transfers</span>
-        </button>
-      </nav>
-
-      <!-- Floating Smart Handoff Drawer / Modal (Triggered when video pauses) -->
-      <aside class="handoff-drawer" id="handoffDrawer">
-        <div class="drawer-handle" id="drawerHandle"></div>
+    <!-- ========================================================================= -->
+    <!-- 3. TV CLIENT SCREEN VIEW (Living Room TV Receiving Media from Phone)     -->
+    <!-- ========================================================================= -->
+    <section class="tv-column-wrapper" id="tvColumnWrapper">
+      <div class="tv-screen-shell" id="tvScreenShell">
         
-        <div class="drawer-header">
-          <div class="drawer-header-left">
-            <div class="pause-icon-pill">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect width="4" height="16" x="6" y="4"/><rect width="4" height="16" x="14" y="4"/></svg>
-            </div>
-            <div>
-              <h3 class="drawer-title">Playback Paused</h3>
-              <p class="drawer-subtitle" id="handoffPausedTimeLabel">Stopped at 04:18 · Continue on nearby device?</p>
-            </div>
+        <!-- TV Top Bar -->
+        <header class="tv-screen-header">
+          <div class="tv-brand">
+            <span class="tv-logo-pill">📺 TV Client</span>
+            <span class="tv-client-title">Living Room Smart TV</span>
           </div>
-          <button class="btn-close-drawer" id="btnCloseHandoffDrawer" title="Dismiss">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
-
-        <div class="drawer-body">
-          <div class="nearby-devices-header">
-            <span class="devices-count-label" id="discoveredCountLabel">3 LocalDrop Devices Nearby</span>
-            <button class="btn-refresh-scan" id="btnRefreshDiscovery" title="Refresh mDNS discovery">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
-            </button>
+          <div class="tv-connection-badge">
+            <span class="pulse-emerald"></span>
+            <span id="tvSourceDeviceName">Connected to Phone: Pixel 9 Pro (192.168.1.54)</span>
           </div>
-
-          <!-- Peer List -->
-          <div class="device-peers-list" id="devicePeersList">
-            <!-- Living Room TV -->
-            <div class="peer-card-selectable selected-peer" data-device-id="tv-livingroom" data-device-name="Living Room Smart TV" data-target-ip="192.168.1.105:8080" data-platform="android-tv">
-              <div class="peer-icon-avatar tv-bg">📺</div>
-              <div class="peer-details">
-                <div class="peer-name-row">
-                  <span class="peer-name">Living Room Smart TV</span>
-                  <span class="peer-signal">98% signal</span>
-                </div>
-                <div class="peer-meta-row">
-                  <span>Android TV 14</span>
-                  <span class="meta-dot">·</span>
-                  <span>192.168.1.105:8080</span>
-                </div>
-              </div>
-              <div class="peer-radio-marker">
-                <span class="radio-check">✓</span>
-              </div>
-            </div>
-
-            <!-- Abhijeet PC -->
-            <div class="peer-card-selectable" data-device-id="pc-abhijeet" data-device-name="Abhijeet's PC" data-target-ip="192.168.1.42:8080" data-platform="windows">
-              <div class="peer-icon-avatar pc-bg">💻</div>
-              <div class="peer-details">
-                <div class="peer-name-row">
-                  <span class="peer-name">Abhijeet's PC</span>
-                  <span class="peer-signal">100% signal</span>
-                </div>
-                <div class="peer-meta-row">
-                  <span>Windows 11</span>
-                  <span class="meta-dot">·</span>
-                  <span>192.168.1.42:8080</span>
-                </div>
-              </div>
-              <div class="peer-radio-marker">
-                <span class="radio-check"></span>
-              </div>
-            </div>
-
-            <!-- Galaxy Tab -->
-            <div class="peer-card-selectable" data-device-id="tab-s9" data-device-name="Galaxy Tab S9" data-target-ip="192.168.1.77:8080" data-platform="android">
-              <div class="peer-icon-avatar tab-bg">📱</div>
-              <div class="peer-details">
-                <div class="peer-name-row">
-                  <span class="peer-name">Galaxy Tab S9</span>
-                  <span class="peer-signal">85% signal</span>
-                </div>
-                <div class="peer-meta-row">
-                  <span>Android 15</span>
-                  <span class="meta-dot">·</span>
-                  <span>192.168.1.77:8080</span>
-                </div>
-              </div>
-              <div class="peer-radio-marker">
-                <span class="radio-check"></span>
-              </div>
-            </div>
+          <div class="tv-meta-status">
+            <span class="tv-speed-chip" id="tvSpeedChip">78.4 MB/s Direct LAN</span>
+            <span class="tv-clock" id="tvClockDisplay">16:45</span>
           </div>
+        </header>
 
-          <!-- Transfer Action Buttons -->
-          <div class="drawer-actions">
-            <button class="btn-primary-action" id="btnExecuteStreamHandoff">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-              <div class="action-btn-text">
-                <span class="action-btn-title">Continue Stream on Selected Device</span>
-                <span class="action-btn-sub" id="actionSubTimestamp">Resumes instantly from 04:18</span>
-              </div>
-            </button>
-
-            <button class="btn-secondary-action" id="btnExecuteFullTransfer">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-              <span>Transfer Entire Video File (284 MB)</span>
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      <!-- Discovery Radar Modal -->
-      <aside class="modal-backdrop" id="radarModal">
-        <div class="radar-modal-content">
-          <div class="modal-top">
-            <h3 class="modal-title">Scanning for LocalDrop Peers</h3>
-            <button class="btn-close-modal" id="btnCloseRadar">✕</button>
-          </div>
-          <p class="modal-sub">Listening for mDNS `_localdrop._tcp` and UDP broadcasts...</p>
+        <!-- Main TV Cinema Player Screen -->
+        <div class="tv-player-viewport">
+          <div class="tv-ambient-glow" id="tvAmbientGlow"></div>
           
-          <div class="radar-animation-box">
-            <div class="radar-circle circle-1"></div>
-            <div class="radar-circle circle-2"></div>
-            <div class="radar-circle circle-3"></div>
-            <div class="radar-scanner-beam"></div>
-            <div class="radar-center-blip">📱</div>
-            
-            <!-- Discovered blips -->
-            <div class="radar-peer-blip blip-tv" title="Living Room TV">📺</div>
-            <div class="radar-peer-blip blip-pc" title="Abhijeet PC">💻</div>
-            <div class="radar-peer-blip blip-tab" title="Galaxy Tab">📱</div>
-          </div>
+          <video id="tvVideoPlayer" preload="auto" playsinline>
+            <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4" type="video/mp4">
+          </video>
 
-          <div class="direct-ip-section">
-            <label for="directIpInput" class="input-label">Direct IP Fallback (AP Isolation):</label>
-            <div class="direct-ip-row">
-              <input type="text" id="directIpInput" placeholder="192.168.1.100:8080" class="input-field">
-              <button class="btn-primary-sm" id="btnConnectDirectIp">Connect</button>
+          <!-- TV Video HUD Overlay -->
+          <div class="tv-hud-overlay" id="tvHudOverlay">
+            <div class="tv-hud-top">
+              <div class="tv-now-playing-pill">
+                <span class="pill-signal"></span>
+                <span id="tvNowPlayingTitle">Tears of Steel (4K Sci-Fi)</span>
+              </div>
+              <div class="tv-stream-tag" id="tvStreamModeTag">Streaming from Phone Gallery</div>
+            </div>
+
+            <!-- Big TV Timeline Bar -->
+            <div class="tv-timeline-section">
+              <div class="tv-timeline-track" id="tvTimelineTrack">
+                <div class="tv-timeline-buffered" id="tvTimelineBuffered"></div>
+                <div class="tv-timeline-fill" id="tvTimelineFill"></div>
+                <div class="tv-timeline-marker" id="tvTimelineMarker"></div>
+              </div>
+              <div class="tv-time-row">
+                <span class="tv-time-current" id="tvTimeCurrent">00:00</span>
+                <span class="tv-time-resumed" id="tvTimeResumed">Stream Synced</span>
+                <span class="tv-time-total" id="tvTimeTotal">12:14</span>
+              </div>
             </div>
           </div>
         </div>
-      </aside>
 
-      <!-- Transfer in Progress Toast / Banner -->
-      <div class="transfer-toast" id="transferToast">
-        <div class="toast-left">
-          <div class="spinner-sm"></div>
-          <div>
-            <div class="toast-title" id="toastTitle">Streaming to Living Room TV...</div>
-            <div class="toast-desc" id="toastDesc">Handing off stream at 04:18 · 78.4 MB/s</div>
+        <!-- TV Shared Gallery Carousel (Showing Phone's Videos on the TV Screen!) -->
+        <section class="tv-shared-gallery-tray">
+          <div class="tray-header-row">
+            <div class="tray-title-group">
+              <h3 class="tray-title">📱 Shared Phone Media Gallery</h3>
+              <p class="tray-subtitle">Videos served live from Phone storage · Select any video using TV or Phone</p>
+            </div>
+            <span class="tray-count-tag" id="tvGalleryCountTag">4 Videos Available</span>
           </div>
+
+          <div class="tv-cards-carousel" id="tvCardsCarousel">
+            <!-- Rendered via JavaScript -->
+          </div>
+        </section>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: Device Target Selector (Prompted on Open or Switch)                -->
+  <!-- ========================================================================= -->
+  <aside class="modal-backdrop" id="devicePickerModal">
+    <div class="device-modal-sheet">
+      <div class="modal-top-bar">
+        <div class="modal-title-box">
+          <h3 class="modal-title">Select Target Screen / TV Client</h3>
+          <p class="modal-sub">Phone will act as media server and stream video directly</p>
         </div>
-        <button class="toast-action-btn" id="toastActionBtn">View</button>
+        <button class="btn-close-modal" id="btnCloseDevicePicker">✕</button>
       </div>
 
+      <div class="discovered-peers-group" id="discoveredPeersGroup">
+        <!-- Living Room Smart TV -->
+        <div class="peer-select-card selected-target" data-id="tv-livingroom" data-name="Living Room Smart TV" data-ip="192.168.1.105:8080" data-type="tv">
+          <div class="peer-avatar tv-avatar">📺</div>
+          <div class="peer-info">
+            <div class="peer-title-row">
+              <span class="peer-title">Living Room Smart TV</span>
+              <span class="peer-sig">98% signal</span>
+            </div>
+            <div class="peer-meta">Android TV 14 · 192.168.1.105:8080</div>
+          </div>
+          <span class="peer-check-badge">✓</span>
+        </div>
+
+        <!-- Bedroom TV -->
+        <div class="peer-select-card" data-id="tv-bedroom" data-name="Bedroom LG WebOS TV" data-ip="192.168.1.112:8080" data-type="tv">
+          <div class="peer-avatar tv-avatar">📺</div>
+          <div class="peer-info">
+            <div class="peer-title-row">
+              <span class="peer-title">Bedroom LG WebOS TV</span>
+              <span class="peer-sig">92% signal</span>
+            </div>
+            <div class="peer-meta">LG WebOS 24 · 192.168.1.112:8080</div>
+          </div>
+          <span class="peer-check-badge"></span>
+        </div>
+
+        <!-- Abhijeet PC -->
+        <div class="peer-select-card" data-id="pc-abhijeet" data-name="Abhijeet's PC Monitor" data-ip="192.168.1.42:8080" data-type="pc">
+          <div class="peer-avatar pc-avatar">💻</div>
+          <div class="peer-info">
+            <div class="peer-title-row">
+              <span class="peer-title">Abhijeet's PC Monitor</span>
+              <span class="peer-sig">100% signal</span>
+            </div>
+            <div class="peer-meta">Windows 11 · 192.168.1.42:8080</div>
+          </div>
+          <span class="peer-check-badge"></span>
+        </div>
+      </div>
+
+      <div class="modal-actions-row">
+        <button class="btn-primary-confirm" id="btnConfirmTargetDevice">
+          <span>Connect & Start Streaming</span>
+        </button>
+      </div>
     </div>
-  </main>
+  </aside>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: Handoff Drawer (When Video is Stopped / Paused)                    -->
+  <!-- ========================================================================= -->
+  <aside class="modal-backdrop" id="stopHandoffModal">
+    <div class="device-modal-sheet">
+      <div class="modal-top-bar">
+        <div class="modal-title-box">
+          <h3 class="modal-title">Playback Paused / Stopped</h3>
+          <p class="modal-sub" id="modalPausedTimeSubtitle">Paused at 04:18 · Choose next action</p>
+        </div>
+        <button class="btn-close-modal" id="btnCloseStopHandoff">✕</button>
+      </div>
+
+      <div class="handoff-choice-cards">
+        <button class="choice-card" id="btnHandoffToTV">
+          <div class="choice-icon">📺</div>
+          <div class="choice-text">
+            <h4 class="choice-title">Stream to Living Room TV</h4>
+            <p class="choice-desc" id="choiceTvTimestamp">Continues smoothly from exact timestamp</p>
+          </div>
+        </button>
+
+        <button class="choice-card" id="btnOpenPhoneGalleryPicker">
+          <div class="choice-icon">📁</div>
+          <div class="choice-text">
+            <h4 class="choice-title">Pick Another Video from Phone Gallery</h4>
+            <p class="choice-desc">Browse local storage and switch stream on TV</p>
+          </div>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Global Toast Notification -->
+  <div class="toast-container" id="toastContainer">
+    <div class="toast-card" id="toastCard">
+      <div class="toast-icon-pulse"></div>
+      <div class="toast-body">
+        <h5 class="toast-heading" id="toastHeading">Streaming to Living Room TV</h5>
+        <p class="toast-detail" id="toastDetail">LocalDrop TCP Engine · 78.4 MB/s</p>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="./src/main.js"></script>
 </body>

@@ -156,6 +156,54 @@ sequenceDiagram
 
 ---
 
+## 2.1 Phone Server to TV Client Architecture (LocalDrop Cast & Shared Gallery)
+
+In this mode, the **Phone acts as the local Media Server & Remote Control Hub**, while the **TV acts as the Screen Client & Receiver**.
+
+```
++-----------------------------------------------------------------------------------------+
+|                                    LOCALDROP CAST                                       |
+|                                                                                         |
+|  +-------------------------------------+            +--------------------------------+  |
+|  |       PHONE (MEDIA SERVER)          |            |       TV (CLIENT SCREEN)       |  |
+|  |  * Camera Roll / Gallery Storage    |            |  * 10-Foot Big Screen Receiver |  |
+|  |  * Direct Video / Audio Access      |            |  * Hardware Video Decoder      |  |
+|  |  * HTTP / TCP Stream Broadcaster    |===========>|  * Ambient Glow HUD Overlay    |  |
+|  |  * Remote Controller (Seek/Pause)   |   78 MB/s  |  * Shared Phone Media Tray     |  |
+|  |  * Live Video Switcher              |  LAN Stream|    (Browse phone clips on TV!) |  |
+|  +-------------------------------------+            +--------------------------------+  |
++-----------------------------------------------------------------------------------------+
+```
+
+### The End-to-End Workflow:
+1. **Device Media Access & Permissions**:
+   - The user opens LocalDrop. The app requests device media storage permission (Audio, Video, Photos).
+   - The user taps **"Add Videos"** or **"+ Pick Video"** to select any video directly from their phone's camera roll, download folder, or external SD card—**without needing to copy files into an isolated app silo**.
+   - Dynamic canvas snapshotting generates instant video thumbnails and duration metadata.
+
+2. **Connecting to the TV Screen**:
+   - The user taps the **Cast Target Selector** in the app header and selects their TV (e.g., *Living Room Smart TV* at `192.168.1.105:8080`).
+   - **Background Video Detection**:
+     - **If a video is already running in background/foreground**: The app immediately casts the current video and begins streaming from the exact millisecond timestamp.
+     - **If NO video is running**: The app prompts the user: *"Pick any video from your phone gallery to stream to Living Room Smart TV"*.
+
+3. **Phone Gallery as "Shared Media Hub" on the TV**:
+   - The TV screen renders a **"📱 Shared Phone Media Gallery"** tray right on the big screen!
+   - Every video selected on the phone is visible on the TV screen with its title, thumbnail, duration, and resolution badge.
+   - **Two-way Switching**:
+     - **From Phone**: Tap any video in the phone's gallery list -> The TV instantly switches the stream to that video!
+     - **From TV**: Select any video card in the TV carousel -> The TV starts playing that video, and the Phone's remote controller updates its "Now Playing" card in real-time!
+
+4. **Real-Time Remote Control**:
+   - The phone interface transforms into a sleek TV remote controller:
+     - **Play / Pause** toggle with instant TV frame sync.
+     - **Touch Scrubber**: Scrubbing the phone timeline seeks the TV playback in real time.
+     - **Skip -10s / +10s**, **Next / Previous Video**, and **TV Audio Mute / Unmute**.
+     - **Stop & Switch Device**: Pauses the TV and displays options to switch screens or pick another movie.
+
+
+---
+
 ## 3. What Happens in "Other Things" (Deep Tech & Edge Cases)
 
 ### 3.1 Network Interruption & Disconnects
