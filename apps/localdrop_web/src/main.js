@@ -574,7 +574,36 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // 10. Cross-Device / Cross-Window Broadcast Synchronization
+  // 10. Persistent Session Storage (No 24/7 background process needed)
+  // ---------------------------------------------------------------------------
+  const STORAGE_KEY = 'localdrop_playback_session_v1';
+
+  function savePlaybackState() {
+    try {
+      const sessionData = {
+        activeVideoIndex: state.activeVideoIndex,
+        pausedTimestamp: state.pausedHandoffTimestamp || tvVideo.currentTime || 0,
+        targetDevice: state.targetDevice,
+        savedAt: Date.now(),
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionData));
+    } catch (e) {
+      console.warn('Failed to save playback state to localStorage', e);
+    }
+  }
+
+  function loadPlaybackState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 11. Cross-Device / Cross-Window Broadcast Synchronization
   // ---------------------------------------------------------------------------
   function broadcastMessage(type, payload = {}) {
     if (castChannel) {
@@ -604,9 +633,30 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
+  // Hook into pause to save state
+  tvVideo.addEventListener('pause', () => {
+    savePlaybackState();
+  });
+  window.addEventListener('beforeunload', () => {
+    savePlaybackState();
+  });
+
   // ---------------------------------------------------------------------------
-  // 11. Initial Kickoff
+  // 12. Initial Kickoff & State Restoration
   // ---------------------------------------------------------------------------
   renderGalleries();
-  selectAndPlayVideo(0, false, 0);
+
+  const restoredSession = loadPlaybackState();
+  if (restoredSession && restoredSession.pausedTimestamp > 2) {
+    const idx = restoredSession.activeVideoIndex || 0;
+    const seekSec = restoredSession.pausedTimestamp;
+    selectAndPlayVideo(idx, false, seekSec);
+    showToast(
+      `Restored Last Session`,
+      `Resumed '${sharedGallery[idx].title}' at ${formatTime(seekSec)} (Saved to disk)`
+    );
+  } else {
+    selectAndPlayVideo(0, false, 0);
+  }
 });
+

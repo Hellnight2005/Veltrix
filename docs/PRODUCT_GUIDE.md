@@ -257,6 +257,24 @@ In this mode, the **Phone acts as the local Media Server & Remote Control Hub**,
 
 ---
 
+### 3.6 Does LocalDrop Need to Run 24/7 to Remember Stopped Videos?
+* **The Question**: Does LocalDrop need to run 24/7 in the background or keep the phone awake just to remember where the video stopped?
+* **Answer**: **NO. Absolutely not.**
+* **How It Works**:
+  1. **Instant On-Disk Persistence (Zero CPU / Zero Battery)**:
+     - The moment you pause or stop a video (e.g. at `04:18`), LocalDrop writes an atomic state manifest to persistent disk storage (`localStorage` / SQLite / binary `.manifest`).
+     - Once written to disk, the app does **not** need to stay awake or run in the background.
+     - You can completely close the app, lock your phone, or turn off your device. When closed, it consumes **0% CPU, 0% RAM, and 0% Battery**.
+  2. **Instant Re-hydration on Re-open**:
+     - When you open LocalDrop again—whether 5 minutes or 3 weeks later—it reads the on-disk manifest in milliseconds:
+       *"Tears of Steel — Stopped at 04:18. Resume locally or Stream to Living Room TV?"*
+  3. **Streaming vs Transferring to TV**:
+     - **In Live Cast Mode**: The phone only runs the Wi-Fi stream socket while actively playing. As soon as you pause, the connection closes and the phone can sleep immediately.
+     - **In LocalDrop Transfer Mode**: The phone sends the full movie file to the TV (takes ~3.5 seconds over 78 MB/s Wi-Fi). Once transferred, the TV has the movie and the pause timestamp saved locally—you can turn off your phone completely and the TV will continue playing on its own!
+
+
+---
+
 ## 4. Comprehensive Protocol State Machine
 
 ```
