@@ -1,0 +1,27 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/localdrop_core",
+    "crates/localdrop_cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["LocalDrop Contributors"]
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+tokio = { version = "1.43", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+postcard = { version = "1.1", features = ["alloc"] }
+sha2 = "0.10"
+thiserror = "2.0"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1.13", features = ["v4", "serde"] }
+clap = { version = "4.5", features = ["derive"] }
+indicatif = "0.17"
+tempfile = "3.17"
+proptest = "1.6"
