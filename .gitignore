@@ -18,3 +18,7 @@ Thumbs.db
 
 # Log files
 *.log
+
+# Web dependencies and build
+node_modules/
+dist/
