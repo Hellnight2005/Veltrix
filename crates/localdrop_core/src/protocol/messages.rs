@@ -90,6 +90,7 @@ pub struct ChunkDataMessage {
     pub chunk_index: u64,
     pub offset: u64,
     pub chunk_sha256: [u8; 32],
+    #[serde(with = "serde_bytes")]
     pub payload: Vec<u8>,
 }
 

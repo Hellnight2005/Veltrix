@@ -122,16 +122,16 @@ localdrop/
 **Goal:** Send one file from machine A to machine B reliably.
 
 **Tasks**
-- [ ] Message framing: length-prefixed read/write with size limits
-- [ ] TCP server (`receive`) and client (`send`)
-- [ ] Handshake: `HELLO`, `CAPABILITIES`, `ACCEPT`
-- [ ] `FILE_METADATA` (transfer id, name, size, SHA-256, chunk size) and `READY`
-- [ ] Streaming file transfer with a fixed buffer. Never load the whole file into memory
-- [ ] SHA-256 computed while streaming, verified at the end
-- [ ] `COMPLETE` / `FAILED_INTEGRITY` reply
-- [ ] Progress callback (bytes sent / total, speed)
-- [ ] CLI: `localdrop receive --port 8080 --out ./inbox` and `localdrop send <ip:port> <file>`
-- [ ] Basic error handling and `tracing` logs
+- [x] Message framing: length-prefixed read/write with size limits
+- [x] TCP server (`receive`) and client (`send`)
+- [x] Handshake: `HELLO`, `CAPABILITIES`, `ACCEPT`
+- [x] `FILE_METADATA` (transfer id, name, size, SHA-256, chunk size) and `READY`
+- [x] Streaming file transfer with a fixed buffer. Never load the whole file into memory
+- [x] SHA-256 computed while streaming, verified at the end
+- [x] `COMPLETE` / `FAILED_INTEGRITY` reply
+- [x] Progress callback (bytes sent / total, speed)
+- [x] CLI: `localdrop receive --port 8080 --out ./inbox` and `localdrop send <ip:port> <file>`
+- [x] Basic error handling and `tracing` logs
 
 **Tests**
 - *Unit:* framing round-trip; message serialization round-trip; reject oversized frames; reject unknown message types; SHA-256 against known vectors.
