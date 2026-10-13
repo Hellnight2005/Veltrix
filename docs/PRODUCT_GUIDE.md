@@ -386,6 +386,30 @@ LocalDrop is designed with defense-in-depth to handle chaotic real-world network
 
 ---
 
+### Edge Case 11: Reconnecting After a Long Time (Days, Weeks, or Months Later)
+* **The Scenario**: You watched a movie, paused it at `04:18`, and completely shut down your phone and laptop. You return 2 weeks later to resume watching.
+* **What Happens**:
+  1. **Dynamic IP Resolution (Router DHCP Lease Changes)**:
+     - Over days or weeks, your home Wi-Fi router often reassigns device IP addresses (e.g., your laptop was `192.168.1.101`, but is now `192.168.1.145`).
+     - **LocalDrop does not rely on hardcoded static IPs**. When both devices are on Wi-Fi, mDNS discovery (`_localdrop._tcp.local`) and UDP beacons resolve the new IP address in under 500 ms using unique device fingerprints.
+     - The phone automatically updates its target route without requiring you to reconfigure anything.
+  2. **Zero Memory Decay (Persistent State on Disk)**:
+     - The paused timestamp (`04:18`), movie ID, and device profile were stored in non-volatile disk storage.
+     - Upon launching the app, LocalDrop re-hydrates the state in 1 millisecond and prompts:
+       > *"Welcome back! Tears of Steel was paused at 04:18. Resume on Phone or Stream to Living Room TV?"*
+     - Tapping **Stream to TV** sends the exact `resume_at: 258.42s` timestamp. The TV starts playing right at `04:18`.
+  3. **Partial File Resume (Never Re-Download Completed Data)**:
+     - If you were transferring a 4 GB file and disconnected halfway through 2 weeks ago, the `.part` file and `.part.manifest` bitset remain on disk.
+     - When you reconnect, the engine checks the file SHA-256 hash and requests only the remaining missing chunks. The 50% already verified is never re-sent.
+  4. **Clean Session Re-Authentication**:
+     - Old ephemeral session keys have expired. A fresh `LD01` handshake creates a clean session token.
+     - Zero zombie sockets, memory leaks, or ghost connections exist.
+  5. **If the Receiver (Laptop/TV) is Initially Off**:
+     - The phone shows: *"Living Room TV · Offline"*.
+     - As soon as the laptop is turned on and opens LocalDrop, the phone detects the beacon and immediately updates to *"Connected · Ready"*.
+
+---
+
 ## 5. Formal Protocol Byte Layouts & Packet Specifications
 
 All messages on the wire adhere to the formal protocol specifications in [`protocol/`](file:///c:/Users/Abhijeet/Desktop/Veltrix/protocol/):
