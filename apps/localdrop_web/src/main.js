@@ -425,20 +425,23 @@ document.addEventListener('DOMContentLoaded', () => {
   // Adaptive Role Switcher Function (AirDrop Engine Core)
   function adaptRole(role, peer, video) {
     state.activeRole = role;
+    let streamUrl = video.url;
+    if (streamUrl && !streamUrl.startsWith('http://') && !streamUrl.startsWith('https://')) {
+      streamUrl = `${getApiBaseUrl()}${streamUrl.startsWith('/') ? '' : '/'}${streamUrl}`;
+    }
+
+    // Always hide standby screen when any video is initiated
+    if (tvStandbyScreen) tvStandbyScreen.style.display = 'none';
+    if (standbyProgressWrap) standbyProgressWrap.style.display = 'none';
+
     if (role === 'receiver') {
       applyViewMode('tv');
       tvVideo.srcObject = null;
-      let streamUrl = video.url;
-      if (streamUrl && !streamUrl.startsWith('http://') && !streamUrl.startsWith('https://')) {
-        streamUrl = `${getApiBaseUrl()}${streamUrl.startsWith('/') ? '' : '/'}${streamUrl}`;
-      }
       tvVideo.src = streamUrl;
       tvNowPlayingTitle.textContent = video.title;
       if (tvSourceDeviceName) {
-        tvSourceDeviceName.textContent = `AirDrop Cinema from: ${peer.name} · Direct LAN`;
+        tvSourceDeviceName.textContent = `AirDrop Stream from: ${peer.name} · Direct LAN`;
       }
-      if (tvStandbyScreen) tvStandbyScreen.style.display = 'none';
-      if (standbyProgressWrap) standbyProgressWrap.style.display = 'none';
 
       tvVideo.muted = false;
       state.isMutedOnTv = false;
@@ -455,14 +458,31 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (role === 'sender') {
       applyViewMode(isMobileDevice ? 'phone' : 'dual');
       phoneNowPlayingTitle.textContent = video.title;
-      let streamUrl = video.url;
-      if (streamUrl && !streamUrl.startsWith('http://') && !streamUrl.startsWith('https://')) {
-        streamUrl = `${getApiBaseUrl()}${streamUrl.startsWith('/') ? '' : '/'}${streamUrl}`;
-      }
       phoneVideo.src = streamUrl;
       phoneVideo.play().catch(() => {});
+
+      // On Laptop/Desktop screen, also play directly on the main TV screen!
+      if (!isMobileDevice) {
+        tvVideo.srcObject = null;
+        tvVideo.src = streamUrl;
+        tvNowPlayingTitle.textContent = video.title;
+        if (tvSourceDeviceName) {
+          tvSourceDeviceName.textContent = `Serving to: ${peer.name} · Direct LAN`;
+        }
+        tvVideo.muted = false;
+        state.isMutedOnTv = false;
+        tvVideo.play().then(() => {
+          if (tvPlayPrompt) tvPlayPrompt.classList.add('prompt-hidden');
+        }).catch(() => {
+          tvVideo.muted = true;
+          state.isMutedOnTv = true;
+          tvVideo.play().catch(() => {});
+          if (tvPlayPrompt) tvPlayPrompt.classList.remove('prompt-hidden');
+        });
+      }
+
       updatePlayPauseIcons(true);
-      showToast(`AirDrop Controller Active`, `Streaming '${video.title}' to ${peer.name}`);
+      showToast(`AirDrop Active`, `Serving '${video.title}' to ${peer.name}`);
     }
   }
 
@@ -1354,7 +1374,20 @@ document.addEventListener('DOMContentLoaded', () => {
   function populateServerVideos(videos) {
     if (!videos || !videos.length) return;
     const base = getApiBaseUrl();
-    videos.forEach((v) => {
+    const defaultThumb = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="225" viewBox="0 0 400 225"><rect width="400" height="225" fill="%230f172a"/><circle cx="200" cy="112" r="36" fill="%236366f1" opacity="0.4"/><polygon points="192,98 218,112 192,128" fill="%2338bdf8"/><text x="200" y="175" font-family="sans-serif" font-size="13" font-weight="bold" fill="%2394a3b8" text-anchor="middle">LocalDrop Cinema</text></svg>';
+
+    // Filter valid files and prioritize web-ready MP4 (H.264 + AAC)
+    const validVideos = videos
+      .filter((v) => v.sizeBytes > 10000)
+      .sort((a, b) => {
+        const aIsMp4 = a.filename.toLowerCase().endsWith('.mp4');
+        const bIsMp4 = b.filename.toLowerCase().endsWith('.mp4');
+        if (aIsMp4 && !bIsMp4) return -1;
+        if (!aIsMp4 && bIsMp4) return 1;
+        return 0;
+      });
+
+    validVideos.forEach((v) => {
       const fullUrl = `${base}${v.streamUrl}`;
       if (!sharedGallery.some((item) => item.title === v.filename)) {
         sharedGallery.push({
@@ -1365,7 +1398,7 @@ document.addEventListener('DOMContentLoaded', () => {
           durationSec: 0,
           sizeStr: v.sizeStr,
           url: fullUrl,
-          thumb: 'https://images.unsplash.com/photo-1536240478700-b869070f9279?w=600&auto=format&fit=crop&q=80',
+          thumb: defaultThumb,
           sourceType: 'server_stream',
         });
       }
@@ -1378,15 +1411,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const airdropMediaCount = document.getElementById('airdropMediaCount');
     if (!airdropMovieGrid || !videos) return;
 
+    // Filter valid files and prioritize web-ready MP4 (H.264 + AAC)
+    const validVideos = videos
+      .filter((v) => v.sizeBytes > 10000)
+      .sort((a, b) => {
+        const aIsMp4 = a.filename.toLowerCase().endsWith('.mp4');
+        const bIsMp4 = b.filename.toLowerCase().endsWith('.mp4');
+        if (aIsMp4 && !bIsMp4) return -1;
+        if (!aIsMp4 && bIsMp4) return 1;
+        return 0;
+      });
+
     if (airdropMediaCount) {
-      airdropMediaCount.textContent = `${videos.length} Streams Ready`;
+      airdropMediaCount.textContent = `${validVideos.length} Streams Ready`;
     }
 
     airdropMovieGrid.innerHTML = '';
-    videos.forEach((v) => {
+    validVideos.forEach((v) => {
       const fullStreamUrl = `${getApiBaseUrl()}${v.streamUrl}`;
       const isMobile = isMobileDevice;
       const targetLabel = isMobile ? 'AirDrop to Screen' : 'AirDrop to Phone';
+      const isWebMp4 = v.filename.toLowerCase().endsWith('.mp4');
 
       const card = document.createElement('div');
       card.className = 'airdrop-movie-card';
@@ -1399,7 +1444,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <span>·</span>
             <span>${v.sizeStr}</span>
             <span>·</span>
-            <span style="color: #10b981; font-weight: 600;">⚡ Instant Play</span>
+            ${isWebMp4 ? '<span style="color: #10b981; font-weight: 700;">⭐ Full Video & Audio</span>' : '<span style="color: #38bdf8; font-weight: 600;">⚡ LAN Stream</span>'}
           </div>
         </div>
         <button class="btn-movie-airdrop" title="Stream immediately to connected device">
