@@ -22,23 +22,44 @@ pub struct ReceivedFileInfo {
 
 /// Sanitize file name to prevent directory traversal attacks or illegal OS characters.
 pub fn sanitize_filename(name: &str) -> Result<String, LocalDropError> {
-    let path = Path::new(name);
-    // Disallow absolute paths, directory components or traversal tokens
-    if path.is_absolute()
-        || name.contains("..")
-        || name.contains('/')
-        || name.contains('\\')
-        || name.trim().is_empty()
-    {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
         return Err(LocalDropError::PathTraversal(name.to_string()));
     }
 
-    // Windows reserved filenames check
+    // Disallow "." and ".." or components containing ".."
+    if trimmed == "." || trimmed == ".." || name.contains("..") {
+        return Err(LocalDropError::PathTraversal(name.to_string()));
+    }
+
+    // Disallow absolute paths, directory components or traversal tokens
+    if Path::new(name).is_absolute() || name.contains('/') || name.contains('\\') {
+        return Err(LocalDropError::PathTraversal(name.to_string()));
+    }
+
+    // Disallow null bytes and control characters (0x00..=0x1F)
+    if name.chars().any(|c| (c as u32) < 0x20 || c == '\0') {
+        return Err(LocalDropError::PathTraversal(name.to_string()));
+    }
+
+    // Disallow Windows reserved illegal filename characters: < > : " | ? *
+    let illegal_chars = ['<', '>', ':', '"', '|', '?', '*'];
+    if name.chars().any(|c| illegal_chars.contains(&c)) {
+        return Err(LocalDropError::PathTraversal(name.to_string()));
+    }
+
+    // Disallow trailing dots or spaces which cause Windows OS path stripping/aliasing
+    if name.ends_with('.') || name.ends_with(' ') {
+        return Err(LocalDropError::PathTraversal(name.to_string()));
+    }
+
+    // Windows reserved filenames check (CON, PRN, AUX, NUL, COM0-COM9, LPT0-LPT9)
     let upper = name.to_ascii_uppercase();
-    let stem = upper.split('.').next().unwrap_or(&upper);
+    let stem = upper.split('.').next().unwrap_or(&upper).trim_end();
     let reserved = [
-        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
-        "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+        "CON", "PRN", "AUX", "NUL", "COM0", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7",
+        "COM8", "COM9", "LPT0", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8",
+        "LPT9",
     ];
     if reserved.contains(&stem) {
         return Err(LocalDropError::PathTraversal(name.to_string()));
@@ -67,7 +88,55 @@ where
         other => return Err(LocalDropError::UnexpectedMessage(format!("{other:?}"))),
     };
 
-    let sanitized_name = sanitize_filename(&meta.file_name)?;
+    let sanitized_name = match sanitize_filename(&meta.file_name) {
+        Ok(n) => n,
+        Err(e) => {
+            let ready_msg = ProtocolMessage::Ready(ReadyMessage {
+                transfer_id: meta.transfer_id,
+                accepted: false,
+                missing_chunks: vec![],
+                rejection_code: Some(e.error_code()),
+            });
+            let _ = write_message(stream, &ready_msg).await;
+            return Err(e);
+        }
+    };
+
+    // Validate chunk size bounds
+    if meta.chunk_size < 16 * 1024 || meta.chunk_size > crate::protocol::framing::MAX_FRAME_SIZE {
+        let ready_msg = ProtocolMessage::Ready(ReadyMessage {
+            transfer_id: meta.transfer_id,
+            accepted: false,
+            missing_chunks: vec![],
+            rejection_code: Some(1001),
+        });
+        let _ = write_message(stream, &ready_msg).await;
+        return Err(LocalDropError::FrameTooLarge(
+            meta.chunk_size,
+            crate::protocol::framing::MAX_FRAME_SIZE,
+        ));
+    }
+
+    let expected_chunks = if meta.file_size == 0 {
+        1
+    } else {
+        meta.file_size.div_ceil(meta.chunk_size as u64)
+    };
+
+    if meta.total_chunks != expected_chunks {
+        let ready_msg = ProtocolMessage::Ready(ReadyMessage {
+            transfer_id: meta.transfer_id,
+            accepted: false,
+            missing_chunks: vec![],
+            rejection_code: Some(3003),
+        });
+        let _ = write_message(stream, &ready_msg).await;
+        return Err(LocalDropError::ChunkOutOfBounds(
+            meta.total_chunks,
+            expected_chunks,
+        ));
+    }
+
     let final_path = destination_dir.join(&sanitized_name);
     let part_path = destination_dir.join(format!("{}.part.{}", sanitized_name, meta.transfer_id));
 
@@ -132,6 +201,31 @@ where
                     ));
                 }
 
+                // Verify chunk offset matches expected chunk index * chunk_size
+                let expected_offset = chunk.chunk_index * meta.chunk_size as u64;
+                if chunk.offset != expected_offset {
+                    let _ = fs::remove_file(&part_path).await;
+                    return Err(LocalDropError::UnexpectedMessage(format!(
+                        "Chunk offset mismatch: expected {}, got {}",
+                        expected_offset, chunk.offset
+                    )));
+                }
+
+                // Verify chunk payload length matches expected size for this chunk
+                let expected_len = if meta.file_size == 0 {
+                    0
+                } else {
+                    (meta.file_size - expected_offset).min(meta.chunk_size as u64) as usize
+                };
+                if chunk.payload.len() != expected_len {
+                    let _ = fs::remove_file(&part_path).await;
+                    return Err(LocalDropError::UnexpectedMessage(format!(
+                        "Chunk payload length mismatch: expected {}, got {}",
+                        expected_len,
+                        chunk.payload.len()
+                    )));
+                }
+
                 // Verify chunk sha256
                 let actual_chunk_sha256: [u8; 32] = Sha256::digest(&chunk.payload).into();
                 if actual_chunk_sha256 != chunk.chunk_sha256 {
@@ -146,16 +240,16 @@ where
                 }
 
                 // Write chunk to disk
-                part_file
-                    .seek(SeekFrom::Start(chunk.offset))
-                    .await
-                    .map_err(|e| LocalDropError::StorageReadFailed(e.to_string()))?;
+                if let Err(e) = part_file.seek(SeekFrom::Start(chunk.offset)).await {
+                    let _ = fs::remove_file(&part_path).await;
+                    return Err(LocalDropError::StorageReadFailed(e.to_string()));
+                }
 
                 if !chunk.payload.is_empty() {
-                    part_file
-                        .write_all(&chunk.payload)
-                        .await
-                        .map_err(|e| LocalDropError::StorageReadFailed(e.to_string()))?;
+                    if let Err(e) = part_file.write_all(&chunk.payload).await {
+                        let _ = fs::remove_file(&part_path).await;
+                        return Err(LocalDropError::StorageReadFailed(e.to_string()));
+                    }
                     running_hasher.update(&chunk.payload);
                 }
 
@@ -167,7 +261,10 @@ where
                     chunk_index: chunk.chunk_index,
                     status: 0,
                 });
-                write_message(stream, &ack).await?;
+                if let Err(e) = write_message(stream, &ack).await {
+                    let _ = fs::remove_file(&part_path).await;
+                    return Err(e);
+                }
 
                 chunk_count += 1;
 
@@ -193,15 +290,32 @@ where
     }
 
     // Flush and close file handle
-    part_file
-        .flush()
-        .await
-        .map_err(|e| LocalDropError::StorageReadFailed(e.to_string()))?;
+    if let Err(e) = part_file.flush().await {
+        let _ = fs::remove_file(&part_path).await;
+        return Err(LocalDropError::StorageReadFailed(e.to_string()));
+    }
     drop(part_file);
 
     // 4. Await TRANSFER_COMPLETE
-    match read_message(stream).await? {
+    let complete_msg = match read_message(stream).await {
+        Ok(msg) => msg,
+        Err(e) => {
+            let _ = fs::remove_file(&part_path).await;
+            return Err(e);
+        }
+    };
+
+    match complete_msg {
         ProtocolMessage::TransferComplete(comp) => {
+            // Validate received bytes match advertised file size!
+            if bytes_received != meta.file_size {
+                let _ = fs::remove_file(&part_path).await;
+                return Err(LocalDropError::IntegrityMismatch(
+                    format!("size {} bytes", meta.file_size),
+                    format!("received {} bytes", bytes_received),
+                ));
+            }
+
             let computed_file_sha256: [u8; 32] = running_hasher.finalize().into();
 
             if computed_file_sha256 != meta.file_sha256 || comp.final_sha256 != meta.file_sha256 {
@@ -231,12 +345,16 @@ where
                 success: true,
                 error_code: None,
             });
-            write_message(stream, &ver_msg).await?;
+            if let Err(e) = write_message(stream, &ver_msg).await {
+                let _ = fs::remove_file(&part_path).await;
+                return Err(e);
+            }
 
             // Atomically rename .part file to final destination
-            fs::rename(&part_path, &final_path)
-                .await
-                .map_err(|e| LocalDropError::StorageReadFailed(e.to_string()))?;
+            if let Err(e) = fs::rename(&part_path, &final_path).await {
+                let _ = fs::remove_file(&part_path).await;
+                return Err(LocalDropError::StorageReadFailed(e.to_string()));
+            }
 
             info!(
                 "Successfully received and verified '{}' at {:?}",
@@ -250,6 +368,10 @@ where
                 file_size: meta.file_size,
                 file_sha256: computed_file_sha256,
             })
+        }
+        ProtocolMessage::Cancel(c) => {
+            let _ = fs::remove_file(&part_path).await;
+            Err(LocalDropError::TransferCancelled(c.reason))
         }
         other => {
             let _ = fs::remove_file(&part_path).await;

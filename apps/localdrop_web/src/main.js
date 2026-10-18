@@ -50,6 +50,124 @@ document.addEventListener('DOMContentLoaded', () => {
     return getPairedPeers().has(peerId);
   }
 
+  // Continuous Playback State & Resume Memory (Continues from exact frame across device switches)
+  function saveResumeProgress(title, currentTime, duration) {
+    if (!title || isNaN(currentTime) || currentTime < 1) return;
+    try {
+      const cache = JSON.parse(localStorage.getItem('localdrop_resume_cache') || '{}');
+      cache[title] = {
+        currentTime: Math.floor(currentTime),
+        duration: Math.floor(duration || 0),
+        updatedAt: Date.now(),
+      };
+      localStorage.setItem('localdrop_resume_cache', JSON.stringify(cache));
+    } catch (e) {}
+  }
+
+  function getResumeProgress(title) {
+    if (!title) return 0;
+    try {
+      const cache = JSON.parse(localStorage.getItem('localdrop_resume_cache') || '{}');
+      const entry = cache[title];
+      if (entry && entry.currentTime) {
+        if (!entry.duration || entry.currentTime < entry.duration - 5) {
+          return entry.currentTime;
+        }
+      }
+    } catch (e) {}
+    return 0;
+  }
+
+  function updateMovieResumeBadge(title, currentTime) {
+    if (!title || !currentTime) return;
+    const cards = document.querySelectorAll('.airdrop-movie-card');
+    cards.forEach((card) => {
+      const titleEl = card.querySelector('.movie-card-title');
+      if (titleEl && (titleEl.getAttribute('title') === title || titleEl.textContent.includes(title))) {
+        let badge = card.querySelector('.movie-badge-resume');
+        const btn = card.querySelector('.btn-movie-airdrop span');
+        if (!badge && currentTime > 1) {
+          badge = document.createElement('span');
+          badge.className = 'movie-badge-resume';
+          badge.style.cssText = 'color: #fbbf24; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35); padding: 2px 7px; border-radius: 999px; font-weight: 700; font-size: 10.5px;';
+          const meta = card.querySelector('.movie-card-meta');
+          if (meta) meta.appendChild(badge);
+        }
+        if (badge) {
+          badge.textContent = `⏱️ Resume at ${formatTime(currentTime)}`;
+        }
+        if (btn && currentTime > 1) {
+          btn.textContent = `⚡ Resume (${formatTime(currentTime)})`;
+        }
+      }
+    });
+  }
+
+  function playWithFrameResume(videoEl, url, seekTime, videoTitle) {
+    if (!videoEl || !url) return;
+
+    let targetUrl = url;
+    if (targetUrl && !targetUrl.startsWith('http://') && !targetUrl.startsWith('https://') && !targetUrl.startsWith('blob:') && !targetUrl.startsWith('data:')) {
+      targetUrl = `${getApiBaseUrl()}${targetUrl.startsWith('/') ? '' : '/'}${targetUrl}`;
+    }
+
+    const title = videoTitle || (videoEl === tvVideo ? tvNowPlayingTitle?.textContent : phoneNowPlayingTitle?.textContent) || '';
+    const resumeTime = (seekTime !== undefined && seekTime > 0)
+      ? seekTime
+      : getResumeProgress(title);
+
+    const applySeek = () => {
+      if (resumeTime > 0 && Math.abs(videoEl.currentTime - resumeTime) > 0.5) {
+        try {
+          videoEl.currentTime = resumeTime;
+        } catch (err) {
+          console.warn('Seek error:', err);
+        }
+      }
+
+      videoEl.muted = false;
+      videoEl.volume = 1.0;
+      state.isMutedOnTv = false;
+      if (phoneVolumeLabel) phoneVolumeLabel.textContent = 'TV Audio: ON';
+
+      const playPromise = videoEl.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            if (tvPlayPrompt) tvPlayPrompt.classList.add('prompt-hidden');
+          })
+          .catch((err) => {
+            console.warn('Autoplay unmuted blocked by policy, trying muted with prompt:', err);
+            videoEl.muted = true;
+            state.isMutedOnTv = true;
+            if (phoneVolumeLabel) phoneVolumeLabel.textContent = 'TV Audio: MUTED';
+            videoEl.play().catch(() => {});
+            if (videoEl === tvVideo && tvPlayPrompt) {
+              tvPlayPrompt.classList.remove('prompt-hidden');
+            }
+          });
+      }
+    };
+
+    videoEl.removeAttribute('poster');
+    videoEl.poster = '';
+    if (tvStandbyScreen) tvStandbyScreen.style.display = 'none';
+
+    if (videoEl.src === targetUrl || (videoEl.currentSrc && videoEl.currentSrc === targetUrl)) {
+      applySeek();
+    } else {
+      videoEl.srcObject = null;
+      videoEl.src = targetUrl;
+      videoEl.load();
+
+      if (videoEl.readyState >= 1) {
+        applySeek();
+      } else {
+        videoEl.addEventListener('loadedmetadata', applySeek, { once: true });
+      }
+    }
+  }
+
   const state = {
     myClientId,
     deviceName: myDeviceName,
@@ -140,10 +258,34 @@ document.addEventListener('DOMContentLoaded', () => {
   const tvTimeTotal = document.getElementById('tvTimeTotal');
   const tvTimelineFill = document.getElementById('tvTimelineFill');
   const tvTimelineMarker = document.getElementById('tvTimelineMarker');
+  const tvTimelineTrack = document.getElementById('tvTimelineTrack');
+  const tvTimelineBuffered = document.getElementById('tvTimelineBuffered');
   const tvCardsCarousel = document.getElementById('tvCardsCarousel');
   const tvGalleryCountTag = document.getElementById('tvGalleryCountTag');
   const tvClockDisplay = document.getElementById('tvClockDisplay');
   const statusClock = document.getElementById('statusClock');
+
+  // TV Native On-Screen Cinema Controls
+  const tvBtnPlayPause = document.getElementById('tvBtnPlayPause');
+  const tvPlayPauseIcon = document.getElementById('tvPlayPauseIcon');
+  const tvBtnPrev = document.getElementById('tvBtnPrev');
+  const tvBtnNext = document.getElementById('tvBtnNext');
+  const tvBtnSkipBack = document.getElementById('tvBtnSkipBack');
+  const tvBtnSkipForward = document.getElementById('tvBtnSkipForward');
+  const tvBtnStop = document.getElementById('tvBtnStop');
+  const tvBtnMute = document.getElementById('tvBtnMute');
+  const tvMuteIcon = document.getElementById('tvMuteIcon');
+  const tvVolumeSlider = document.getElementById('tvVolumeSlider');
+  const tvVolumeLabel = document.getElementById('tvVolumeLabel');
+  const tvSubtitleSelect = document.getElementById('tvSubtitleSelect');
+  const tvSubFileInput = document.getElementById('tvSubFileInput');
+  const tvBtnFullscreen = document.getElementById('tvBtnFullscreen');
+  const tvBtnTopFullscreen = document.getElementById('tvBtnTopFullscreen');
+
+  // Phone Subtitles & Fullscreen Controls
+  const phoneSubtitleSelect = document.getElementById('phoneSubtitleSelect');
+  const phoneSubFileInput = document.getElementById('phoneSubFileInput');
+  const phoneBtnFullscreen = document.getElementById('phoneBtnFullscreen');
 
   // Modals & Toasts
   const devicePickerModal = document.getElementById('devicePickerModal');
@@ -277,14 +419,104 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (e) {}
   }
-  setInterval(sendHeartbeat, 5000);
+  sendHeartbeat();
+  setInterval(sendHeartbeat, 3000);
 
   function updateNearbyPeers(peersList) {
     nearbyPeers = peersList.filter((p) => p.id !== state.myClientId);
     renderNearbyPeers();
   }
 
+  function getCurrentActiveVideo() {
+    if (state.activeVideoIndex >= 0 && sharedGallery[state.activeVideoIndex]) {
+      return sharedGallery[state.activeVideoIndex];
+    }
+    const currentTitle = (tvNowPlayingTitle && tvNowPlayingTitle.textContent) || (phoneNowPlayingTitle && phoneNowPlayingTitle.textContent);
+    const currentSrc = tvVideo.src || phoneVideo.src;
+    if (currentSrc && currentTitle && currentTitle !== 'Ready to Stream' && currentTitle !== 'No Video Selected') {
+      return { url: currentSrc, title: currentTitle };
+    }
+    return sharedGallery[0] || null;
+  }
+
+  function handoffStreamToPeer(targetPeer) {
+    const activeVideo = getCurrentActiveVideo();
+    if (!activeVideo || !activeVideo.url) {
+      state.targetDevice = targetPeer;
+      showToast(`Selected ${targetPeer.name}`, `Choose any movie below to stream to this device.`);
+      const airdropSection = document.getElementById('airdropMediaServerSection');
+      if (airdropSection) airdropSection.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+
+    // Exact frame timestamp
+    const currentSeconds = Math.floor(tvVideo.currentTime || phoneVideo.currentTime || getResumeProgress(activeVideo.title) || 0);
+
+    saveResumeProgress(activeVideo.title, currentSeconds, tvVideo.duration || phoneVideo.duration);
+
+    showToast(`Switching to ${targetPeer.name}!`, `Continuing stream from ${formatTime(currentSeconds)} (0-wait)`);
+
+    // Broadcast instant switch with exact seekTime
+    broadcastMessage('SWITCH_VIDEO', {
+      url: activeVideo.url,
+      title: activeVideo.title,
+      seekTime: currentSeconds,
+      shouldAutoPlay: true,
+      targetPeerId: targetPeer.id,
+      fromDevice: state.deviceName,
+    });
+
+    // Also send AirDrop offer
+    broadcastMessage('AIRDROP_OFFER', {
+      fromId: state.myClientId,
+      fromName: state.deviceName,
+      fromType: isMobileDevice ? 'phone' : 'laptop',
+      toId: targetPeer.id,
+      video: {
+        title: activeVideo.title,
+        url: activeVideo.url,
+        seekTime: currentSeconds,
+      }
+    });
+
+    adaptRole('sender', targetPeer, { title: activeVideo.title, url: activeVideo.url, seekTime: currentSeconds });
+  }
+
+  function renderHandoffChips() {
+    const containers = [
+      document.getElementById('handoffDeviceChips'),
+      document.getElementById('phoneHandoffDeviceChips')
+    ];
+
+    containers.forEach((container) => {
+      if (!container) return;
+      container.innerHTML = '';
+
+      if (nearbyPeers.length === 0) {
+        container.innerHTML = `<span style="font-size: 11px; color: #64748b; font-weight: 500;">Searching nearby Wi-Fi devices...</span>`;
+        return;
+      }
+
+      nearbyPeers.forEach((peer) => {
+        const btn = document.createElement('button');
+        btn.className = 'handoff-chip-btn';
+        btn.innerHTML = `
+          <span>${peer.type === 'phone' ? '📱' : '💻'}</span>
+          <span>${peer.name}</span>
+          <span style="opacity: 0.8; font-size: 10px; background: rgba(255,255,255,0.15); padding: 1px 6px; border-radius: 999px;">⚡ Switch</span>
+        `;
+        btn.title = `Switch screen to ${peer.name} and resume from current frame instantly`;
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          handoffStreamToPeer(peer);
+        });
+        container.appendChild(btn);
+      });
+    });
+  }
+
   function renderNearbyPeers() {
+    renderHandoffChips();
     if (!airdropPeersList) return;
     if (nearbyPeers.length === 0) {
       if (airdropPeerCount) airdropPeerCount.textContent = 'Searching...';
@@ -304,7 +536,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const isPaired = isPeerPaired(peer.id);
       const card = document.createElement('div');
       card.className = `airdrop-peer-card ${isPaired ? 'peer-paired' : ''}`;
-      card.title = isPaired ? `Paired with ${peer.name}. Tap to AirDrop video!` : `Tap to pair and AirDrop with ${peer.name}`;
+      card.title = isPaired ? `Paired with ${peer.name}. Tap to stream/handoff video!` : `Tap to pair and stream with ${peer.name}`;
       card.innerHTML = `
         <div class="peer-card-avatar">${peer.type === 'phone' ? '📱' : '💻'}</div>
         <div class="peer-card-info">
@@ -316,7 +548,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <button class="btn-peer-action">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-          <span>${isPaired ? 'AirDrop' : 'Pair & Drop'}</span>
+          <span>${isPaired ? 'AirDrop Stream' : 'Pair & Stream'}</span>
         </button>
       `;
 
@@ -338,9 +570,7 @@ document.addEventListener('DOMContentLoaded', () => {
           showToast(`Paired with ${peer.name}!`, 'Future AirDrop streams will connect automatically.');
         }
 
-        if (airdropPeerFileInput) {
-          airdropPeerFileInput.click();
-        }
+        handoffStreamToPeer(peer);
       });
 
       airdropPeersList.appendChild(card);
@@ -426,9 +656,13 @@ document.addEventListener('DOMContentLoaded', () => {
   function adaptRole(role, peer, video) {
     state.activeRole = role;
     let streamUrl = video.url;
-    if (streamUrl && !streamUrl.startsWith('http://') && !streamUrl.startsWith('https://')) {
+    if (streamUrl && !streamUrl.startsWith('http://') && !streamUrl.startsWith('https://') && !streamUrl.startsWith('blob:') && !streamUrl.startsWith('data:')) {
       streamUrl = `${getApiBaseUrl()}${streamUrl.startsWith('/') ? '' : '/'}${streamUrl}`;
     }
+
+    const seekTime = (video && video.seekTime !== undefined && video.seekTime > 0)
+      ? video.seekTime
+      : getResumeProgress(video.title);
 
     // Always hide standby screen when any video is initiated
     if (tvStandbyScreen) tvStandbyScreen.style.display = 'none';
@@ -436,53 +670,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (role === 'receiver') {
       applyViewMode('tv');
-      tvVideo.srcObject = null;
-      tvVideo.src = streamUrl;
       tvNowPlayingTitle.textContent = video.title;
       if (tvSourceDeviceName) {
         tvSourceDeviceName.textContent = `AirDrop Stream from: ${peer.name} · Direct LAN`;
       }
 
-      tvVideo.muted = false;
-      state.isMutedOnTv = false;
-      tvVideo.play().then(() => {
-        if (tvPlayPrompt) tvPlayPrompt.classList.add('prompt-hidden');
-      }).catch(() => {
-        tvVideo.muted = true;
-        state.isMutedOnTv = true;
-        tvVideo.play().catch(() => {});
-        if (tvPlayPrompt) tvPlayPrompt.classList.remove('prompt-hidden');
-      });
+      playWithFrameResume(tvVideo, streamUrl, seekTime, video.title);
       updatePlayPauseIcons(true);
-      showToast(`AirDrop Connected`, `Now playing '${video.title}' from ${peer.name}`);
+      showToast(`AirDrop Connected`, `Now playing '${video.title}' from ${peer.name}${seekTime > 0 ? ' (Resumed at ' + formatTime(seekTime) + ')' : ''}`);
     } else if (role === 'sender') {
       applyViewMode(isMobileDevice ? 'phone' : 'dual');
       phoneNowPlayingTitle.textContent = video.title;
-      phoneVideo.src = streamUrl;
-      phoneVideo.play().catch(() => {});
 
-      // On Laptop/Desktop screen, also play directly on the main TV screen!
-      if (!isMobileDevice) {
-        tvVideo.srcObject = null;
-        tvVideo.src = streamUrl;
+      // When phone is sending/casting to TV or Laptop:
+      // Pause local playback on phone to prevent duplicate audio and frame collision!
+      if (isMobileDevice) {
+        phoneVideo.pause();
+        const phoneActiveBadge = document.getElementById('phoneActiveBadge');
+        if (phoneActiveBadge) {
+          phoneActiveBadge.textContent = `📺 Streaming to ${peer.name} · Remote Active`;
+        }
+      } else {
+        // Laptop screen serving to phone or TV
         tvNowPlayingTitle.textContent = video.title;
         if (tvSourceDeviceName) {
           tvSourceDeviceName.textContent = `Serving to: ${peer.name} · Direct LAN`;
         }
-        tvVideo.muted = false;
-        state.isMutedOnTv = false;
-        tvVideo.play().then(() => {
-          if (tvPlayPrompt) tvPlayPrompt.classList.add('prompt-hidden');
-        }).catch(() => {
-          tvVideo.muted = true;
-          state.isMutedOnTv = true;
-          tvVideo.play().catch(() => {});
-          if (tvPlayPrompt) tvPlayPrompt.classList.remove('prompt-hidden');
-        });
+        playWithFrameResume(tvVideo, streamUrl, seekTime, video.title);
       }
 
       updatePlayPauseIcons(true);
-      showToast(`AirDrop Active`, `Serving '${video.title}' to ${peer.name}`);
+      showToast(`AirDrop Active`, `Serving '${video.title}' to ${peer.name}${seekTime > 0 ? ' (Resumed at ' + formatTime(seekTime) + ')' : ''}`);
     }
   }
 
@@ -916,119 +1134,241 @@ document.addEventListener('DOMContentLoaded', () => {
     phoneNowPlayingTitle.textContent = media.title;
     tvNowPlayingTitle.textContent = media.title;
 
-    phoneVideo.src = media.url;
-    phoneVideo.poster = media.thumb;
-    phoneVideo.load();
+    const resumeTime = (seekTime > 0) ? seekTime : getResumeProgress(media.title);
 
-    if (!isRemote) {
-      tvVideo.src = media.url;
-      tvVideo.poster = media.thumb;
-      tvVideo.load();
-    }
-
-    if (seekTime > 0) {
-      phoneVideo.currentTime = seekTime;
-      tvVideo.currentTime = seekTime;
-    }
-
-    if (shouldAutoPlay) {
-      state.isPlaying = true;
-      phoneVideo.play().catch(() => {});
-      const playPromise = tvVideo.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            if (tvPlayPrompt) tvPlayPrompt.classList.add('prompt-hidden');
-          })
-          .catch(() => {
-            tvVideo.muted = true;
-            state.isMutedOnTv = true;
-            tvVideo.play().catch(() => {});
-            if (tvPlayPrompt) tvPlayPrompt.classList.remove('prompt-hidden');
-          });
+    const isTvActive = (state.currentMode === 'tv' || !isMobileDevice);
+    if (isTvActive) {
+      playWithFrameResume(tvVideo, media.url, resumeTime, media.title);
+      if (isMobileDevice) {
+        phoneVideo.pause();
       }
-      updatePlayPauseIcons(true);
     } else {
-      state.isPlaying = false;
-      updatePlayPauseIcons(false);
+      // Mobile device in Phone mode:
+      // If streaming to TV/Laptop (or remote peer selected), pause local playback on phone!
+      if (!isRemote) {
+        phoneVideo.pause();
+        const phoneActiveBadge = document.getElementById('phoneActiveBadge');
+        if (phoneActiveBadge) {
+          phoneActiveBadge.textContent = `📺 Streaming to ${state.targetDevice?.name || 'Screen'} · Remote Active`;
+        }
+      } else {
+        playWithFrameResume(phoneVideo, media.url, resumeTime, media.title);
+      }
     }
+
+    state.isPlaying = shouldAutoPlay;
+    updatePlayPauseIcons(shouldAutoPlay);
 
     renderGalleries();
 
     if (!isRemote) {
-      broadcastMessage('SWITCH_VIDEO', { index, url: media.url, shouldAutoPlay, seekTime, title: media.title });
+      broadcastMessage('SWITCH_VIDEO', { 
+        index, 
+        url: media.url, 
+        shouldAutoPlay, 
+        seekTime: resumeTime, 
+        title: media.title,
+        fromDevice: state.deviceName 
+      });
     }
   }
 
   function updatePlayPauseIcons(isPlaying) {
     state.isPlaying = isPlaying;
     if (isPlaying) {
-      phonePlayPauseIcon.innerHTML = pauseSvg;
-      phoneOverlayIcon.innerHTML = pauseSvg;
-      phoneVideoOverlay.classList.add('overlay-hidden');
+      if (phonePlayPauseIcon) phonePlayPauseIcon.innerHTML = pauseSvg;
+      if (phoneOverlayIcon) phoneOverlayIcon.innerHTML = pauseSvg;
+      if (tvPlayPauseIcon) tvPlayPauseIcon.innerHTML = pauseSvg;
+      if (phoneVideoOverlay) phoneVideoOverlay.classList.add('overlay-hidden');
       if (tvPlayPrompt) tvPlayPrompt.classList.add('prompt-hidden');
     } else {
-      phonePlayPauseIcon.innerHTML = playSvg;
-      phoneOverlayIcon.innerHTML = playSvg;
-      phoneVideoOverlay.classList.remove('overlay-hidden');
+      if (phonePlayPauseIcon) phonePlayPauseIcon.innerHTML = playSvg;
+      if (phoneOverlayIcon) phoneOverlayIcon.innerHTML = playSvg;
+      if (tvPlayPauseIcon) tvPlayPauseIcon.innerHTML = playSvg;
+      if (phoneVideoOverlay) phoneVideoOverlay.classList.remove('overlay-hidden');
     }
   }
 
   function togglePlayPause() {
-    if (tvVideo.paused || tvVideo.ended) {
-      tvVideo.play().catch(() => {});
-      phoneVideo.play().catch(() => {});
+    const isTvActive = (state.currentMode === 'tv' || !isMobileDevice);
+    const targetEl = isTvActive ? tvVideo : phoneVideo;
+    if (targetEl.paused || targetEl.ended) {
+      targetEl.play().catch(() => {});
       updatePlayPauseIcons(true);
-      broadcastMessage('PLAY', { currentTime: tvVideo.currentTime || phoneVideo.currentTime });
+      broadcastMessage('PLAY', { currentTime: targetEl.currentTime });
     } else {
-      tvVideo.pause();
-      phoneVideo.pause();
+      targetEl.pause();
       updatePlayPauseIcons(false);
-      state.pausedHandoffTimestamp = tvVideo.currentTime || phoneVideo.currentTime;
+      state.pausedHandoffTimestamp = targetEl.currentTime;
       broadcastMessage('PAUSE', { currentTime: state.pausedHandoffTimestamp });
     }
   }
 
+  // Subtitle track switcher for HTML5 <video> textTracks
+  function applySubtitleSelection(videoEl, trackChoice) {
+    if (!videoEl || !videoEl.textTracks) return;
+    const tracks = videoEl.textTracks;
+    for (let i = 0; i < tracks.length; i++) {
+      const track = tracks[i];
+      const label = (track.label || '').toLowerCase();
+      const lang = (track.language || '').toLowerCase();
+      
+      if (trackChoice === 'off') {
+        track.mode = 'disabled';
+      } else if (trackChoice === 'eng') {
+        if (label.includes('english') || label.includes('eng') || lang === 'en' || (i === 0 && !label.includes('signs'))) {
+          track.mode = 'showing';
+        } else {
+          track.mode = 'disabled';
+        }
+      } else if (trackChoice === 'signs') {
+        if (label.includes('sign') || label.includes('song')) {
+          track.mode = 'showing';
+        } else {
+          track.mode = 'disabled';
+        }
+      } else if (trackChoice === 'custom') {
+        if (label.includes('custom')) {
+          track.mode = 'showing';
+        } else {
+          track.mode = 'disabled';
+        }
+      }
+    }
+  }
+
+  function loadCustomSubtitleFile(file, videoEl, selectEl) {
+    if (!file || !videoEl) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      let content = e.target.result;
+      if (file.name.endsWith('.srt')) {
+        content = 'WEBVTT\n\n' + content
+          .replace(/\r\n|\r/g, '\n')
+          .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
+      }
+      const blob = new Blob([content], { type: 'text/vtt' });
+      const url = URL.createObjectURL(blob);
+      
+      const existing = videoEl.querySelector('track[label="Custom Subtitles"]');
+      if (existing) existing.remove();
+
+      const newTrack = document.createElement('track');
+      newTrack.kind = 'subtitles';
+      newTrack.label = 'Custom Subtitles';
+      newTrack.srclang = 'custom';
+      newTrack.src = url;
+      newTrack.default = true;
+      videoEl.appendChild(newTrack);
+
+      setTimeout(() => {
+        applySubtitleSelection(videoEl, 'custom');
+        if (selectEl) selectEl.value = 'custom';
+        showToast('Subtitles Loaded', `Loaded '${file.name}'`);
+      }, 100);
+    };
+    reader.readAsText(file);
+  }
+
+  function toggleFullscreen(targetEl) {
+    const el = targetEl || document.querySelector('.tv-player-viewport') || tvVideo;
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      if (el.requestFullscreen) {
+        el.requestFullscreen().catch(() => {});
+      } else if (el.webkitRequestFullscreen) {
+        el.webkitRequestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      }
+    }
+  }
+
+  function updateTvMuteIcon(isMuted) {
+    if (!tvMuteIcon) return;
+    if (isMuted) {
+      tvMuteIcon.innerHTML = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" x2="1" y1="1" y2="23"/>`;
+    } else {
+      tvMuteIcon.innerHTML = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>`;
+    }
+  }
+
   // ---------------------------------------------------------------------------
-  // 10. Event Listeners: Phone & TV Video Sync
+  // 10. Event Listeners: Phone & TV Video Sync & Audio Activation
   // ---------------------------------------------------------------------------
-  phoneBtnPlayPause.addEventListener('click', togglePlayPause);
-  phoneOverlayPlayBtn.addEventListener('click', togglePlayPause);
-  phoneVideoOverlay.addEventListener('click', togglePlayPause);
+  function ensureAudioUnmuted() {
+    if (tvVideo) {
+      tvVideo.muted = false;
+      tvVideo.volume = 1.0;
+      state.isMutedOnTv = false;
+      if (phoneVolumeLabel) phoneVolumeLabel.textContent = 'TV Audio: ON';
+      if (tvVolumeLabel) tvVolumeLabel.textContent = '100%';
+      if (tvVolumeSlider) tvVolumeSlider.value = 100;
+      updateTvMuteIcon(false);
+      if (tvPlayPrompt) tvPlayPrompt.classList.add('prompt-hidden');
+    }
+    if (phoneVideo) {
+      phoneVideo.muted = false;
+      phoneVideo.volume = 1.0;
+    }
+  }
+
+  // Any user click/touch anywhere enables audio output
+  document.addEventListener('click', ensureAudioUnmuted, { passive: true });
+  document.addEventListener('touchstart', ensureAudioUnmuted, { passive: true });
+
+  phoneBtnPlayPause.addEventListener('click', () => {
+    ensureAudioUnmuted();
+    togglePlayPause();
+  });
+  phoneOverlayPlayBtn.addEventListener('click', () => {
+    ensureAudioUnmuted();
+    togglePlayPause();
+  });
+  phoneVideoOverlay.addEventListener('click', () => {
+    ensureAudioUnmuted();
+    togglePlayPause();
+  });
+
+  if (phoneVideo) {
+    phoneVideo.addEventListener('click', () => {
+      ensureAudioUnmuted();
+      if (phoneVideo.paused) {
+        phoneVideo.play().catch(() => {});
+      }
+    });
+  }
 
   if (tvPlayPrompt) {
     tvPlayPrompt.addEventListener('click', () => {
-      tvVideo.muted = false;
-      state.isMutedOnTv = false;
-      if (phoneVolumeLabel) phoneVolumeLabel.textContent = 'TV Audio: ON';
-      tvVideo
-        .play()
-        .then(() => {
-          tvPlayPrompt.classList.add('prompt-hidden');
-          updatePlayPauseIcons(true);
-          showToast('Cinema Audio Active', 'Playing on TV screen with audio');
-        })
-        .catch((e) => console.warn(e));
+      ensureAudioUnmuted();
+      tvVideo.play().catch((e) => console.warn(e));
+      updatePlayPauseIcons(true);
+      showToast('Cinema Audio Active', 'Playing on TV screen with audio');
     });
   }
 
   // Also clicking anywhere on the TV screen/video unmutes and plays audio
   if (tvVideo) {
     tvVideo.addEventListener('click', () => {
-      if (tvVideo.muted || (tvPlayPrompt && !tvPlayPrompt.classList.contains('prompt-hidden'))) {
-        tvVideo.muted = false;
-        state.isMutedOnTv = false;
-        if (tvPlayPrompt) tvPlayPrompt.classList.add('prompt-hidden');
+      ensureAudioUnmuted();
+      if (tvVideo.paused) {
         tvVideo.play().catch(() => {});
         updatePlayPauseIcons(true);
-        showToast('Audio Active', 'Audio unmuted on screen');
       }
+      showToast('Audio Active', 'Audio unmuted on screen');
     });
   }
 
-  tvVideo.addEventListener('timeupdate', () => {
-    const current = tvVideo.currentTime;
-    const duration = tvVideo.duration || (sharedGallery[state.activeVideoIndex] ? sharedGallery[state.activeVideoIndex].durationSec : 1) || 1;
+  let lastBroadcastSec = 0;
+
+  function handleVideoTimeUpdate(videoEl) {
+    if (!videoEl) return;
+    const current = videoEl.currentTime;
+    const duration = videoEl.duration || (sharedGallery[state.activeVideoIndex] ? sharedGallery[state.activeVideoIndex].durationSec : 1) || 1;
     const percent = Math.min(100, (current / duration) * 100);
 
     tvTimeCurrent.textContent = formatTime(current);
@@ -1036,11 +1376,39 @@ document.addEventListener('DOMContentLoaded', () => {
     tvTimelineFill.style.width = `${percent}%`;
     tvTimelineMarker.style.left = `${percent}%`;
 
+    // Buffer range display for HTTP 206 chunked stream
+    if (videoEl.buffered && videoEl.buffered.length > 0) {
+      try {
+        const bufferedEnd = videoEl.buffered.end(videoEl.buffered.length - 1);
+        const buffPercent = Math.min(100, (bufferedEnd / duration) * 100);
+        if (tvTimelineBuffered) tvTimelineBuffered.style.width = `${buffPercent}%`;
+      } catch (e) {}
+    }
+
     phoneTimeCurrent.textContent = formatTime(current);
     phoneTimeDuration.textContent = formatTime(duration);
     phoneScrubberFill.style.width = `${percent}%`;
     phoneScrubberThumb.style.left = `${percent}%`;
-  });
+
+    const title = (tvNowPlayingTitle && tvNowPlayingTitle.textContent) || (phoneNowPlayingTitle && phoneNowPlayingTitle.textContent);
+    if (title && title !== 'Ready to Stream' && title !== 'No Video Selected' && current > 1) {
+      saveResumeProgress(title, current, duration);
+      updateMovieResumeBadge(title, current);
+
+      const curSec = Math.floor(current);
+      if (curSec % 3 === 0 && curSec !== lastBroadcastSec) {
+        lastBroadcastSec = curSec;
+        broadcastMessage('SYNC_PROGRESS', {
+          title,
+          currentTime: curSec,
+          duration: Math.floor(duration),
+        });
+      }
+    }
+  }
+
+  tvVideo.addEventListener('timeupdate', () => handleVideoTimeUpdate(tvVideo));
+  phoneVideo.addEventListener('timeupdate', () => handleVideoTimeUpdate(phoneVideo));
 
   tvVideo.addEventListener('pause', () => {
     updatePlayPauseIcons(false);
@@ -1125,6 +1493,159 @@ document.addEventListener('DOMContentLoaded', () => {
     phoneVolumeLabel.textContent = state.isMutedOnTv ? 'TV Audio: MUTED' : 'TV Audio: ON';
     showToast('TV Audio', state.isMutedOnTv ? 'Muted' : 'Unmuted');
   });
+
+  // ---------------------------------------------------------------------------
+  // 10.1 TV On-Screen Cinema Controls (Interactive on TV & Laptop Screen)
+  // ---------------------------------------------------------------------------
+  if (tvTimelineTrack) {
+    tvTimelineTrack.addEventListener('click', (e) => {
+      const rect = tvTimelineTrack.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const fraction = Math.max(0, Math.min(1, clickX / rect.width));
+      const duration = tvVideo.duration || 1;
+      const seekTo = fraction * duration;
+      tvVideo.currentTime = seekTo;
+      broadcastMessage('SEEK', { currentTime: seekTo });
+      showToast('Seeked', formatTime(seekTo));
+    });
+  }
+
+  if (tvBtnPlayPause) {
+    tvBtnPlayPause.addEventListener('click', () => {
+      ensureAudioUnmuted();
+      togglePlayPause();
+    });
+  }
+
+  if (tvBtnSkipBack) {
+    tvBtnSkipBack.addEventListener('click', () => {
+      const seekTo = Math.max(0, tvVideo.currentTime - 10);
+      tvVideo.currentTime = seekTo;
+      broadcastMessage('SEEK', { currentTime: seekTo });
+    });
+  }
+
+  if (tvBtnSkipForward) {
+    tvBtnSkipForward.addEventListener('click', () => {
+      const seekTo = Math.min(tvVideo.duration || 9999, tvVideo.currentTime + 10);
+      tvVideo.currentTime = seekTo;
+      broadcastMessage('SEEK', { currentTime: seekTo });
+    });
+  }
+
+  if (tvBtnPrev) {
+    tvBtnPrev.addEventListener('click', () => {
+      if (sharedGallery.length <= 1) return;
+      const newIdx = (state.activeVideoIndex - 1 + sharedGallery.length) % sharedGallery.length;
+      selectAndPlayVideo(newIdx, true);
+    });
+  }
+
+  if (tvBtnNext) {
+    tvBtnNext.addEventListener('click', () => {
+      if (sharedGallery.length <= 1) return;
+      const newIdx = (state.activeVideoIndex + 1) % sharedGallery.length;
+      selectAndPlayVideo(newIdx, true);
+    });
+  }
+
+  if (tvBtnStop) {
+    tvBtnStop.addEventListener('click', () => {
+      tvVideo.pause();
+      tvVideo.currentTime = 0;
+      if (tvStandbyScreen) tvStandbyScreen.style.display = 'flex';
+      updatePlayPauseIcons(false);
+      broadcastMessage('PAUSE', { currentTime: 0 });
+      showToast('Playback Stopped', 'TV Screen in Standby');
+    });
+  }
+
+  if (tvVolumeSlider) {
+    tvVolumeSlider.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value, 10);
+      tvVideo.volume = val / 100;
+      tvVideo.muted = (val === 0);
+      if (tvVolumeLabel) tvVolumeLabel.textContent = `${val}%`;
+      updateTvMuteIcon(val === 0);
+    });
+  }
+
+  if (tvBtnMute) {
+    tvBtnMute.addEventListener('click', () => {
+      tvVideo.muted = !tvVideo.muted;
+      if (tvVideo.muted) {
+        if (tvVolumeLabel) tvVolumeLabel.textContent = 'Muted';
+        updateTvMuteIcon(true);
+      } else {
+        if (tvVideo.volume === 0) tvVideo.volume = 1.0;
+        if (tvVolumeSlider) tvVolumeSlider.value = Math.round(tvVideo.volume * 100);
+        if (tvVolumeLabel) tvVolumeLabel.textContent = `${tvVolumeSlider.value}%`;
+        updateTvMuteIcon(false);
+      }
+      showToast('TV Audio', tvVideo.muted ? 'Muted' : 'Unmuted');
+    });
+  }
+
+  if (tvSubtitleSelect) {
+    tvSubtitleSelect.addEventListener('change', (e) => {
+      const val = e.target.value;
+      if (val === 'custom') {
+        if (tvSubFileInput) tvSubFileInput.click();
+      } else {
+        applySubtitleSelection(tvVideo, val);
+        showToast('Subtitles', e.target.options[e.target.selectedIndex].text);
+      }
+    });
+  }
+
+  if (tvSubFileInput) {
+    tvSubFileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        loadCustomSubtitleFile(e.target.files[0], tvVideo, tvSubtitleSelect);
+      }
+    });
+  }
+
+  if (tvBtnFullscreen) {
+    tvBtnFullscreen.addEventListener('click', () => {
+      toggleFullscreen(document.querySelector('.tv-player-viewport'));
+    });
+  }
+
+  if (tvBtnTopFullscreen) {
+    tvBtnTopFullscreen.addEventListener('click', () => {
+      toggleFullscreen(document.querySelector('.tv-player-viewport'));
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // 10.2 Phone Subtitles & Fullscreen Event Listeners
+  // ---------------------------------------------------------------------------
+  if (phoneSubtitleSelect) {
+    phoneSubtitleSelect.addEventListener('change', (e) => {
+      const val = e.target.value;
+      if (val === 'custom') {
+        if (phoneSubFileInput) phoneSubFileInput.click();
+      } else {
+        applySubtitleSelection(phoneVideo, val);
+        showToast('Phone Subtitles', e.target.options[e.target.selectedIndex].text);
+      }
+    });
+  }
+
+  if (phoneSubFileInput) {
+    phoneSubFileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        loadCustomSubtitleFile(e.target.files[0], phoneVideo, phoneSubtitleSelect);
+      }
+    });
+  }
+
+  if (phoneBtnFullscreen) {
+    phoneBtnFullscreen.addEventListener('click', () => {
+      toggleFullscreen(phoneVideo);
+    });
+  }
 
   // ---------------------------------------------------------------------------
   // 11. Target Device Selection Modal (TV Client Picker)
@@ -1234,11 +1755,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (standbyProgressWrap) standbyProgressWrap.style.display = 'none';
 
       let targetUrl = payload.url;
-      if (targetUrl && !targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+      if (targetUrl && !targetUrl.startsWith('http://') && !targetUrl.startsWith('https://') && !targetUrl.startsWith('blob:') && !targetUrl.startsWith('data:')) {
         targetUrl = `${getApiBaseUrl()}${targetUrl.startsWith('/') ? '' : '/'}${targetUrl}`;
       }
 
       const videoTitle = payload.title || 'Video Stream';
+      const resumeTime = (payload.seekTime !== undefined && payload.seekTime > 0)
+        ? payload.seekTime
+        : getResumeProgress(videoTitle);
 
       // Update Shared Gallery
       let entry = sharedGallery.find((v) => v.url === targetUrl || v.title === videoTitle);
@@ -1247,8 +1771,8 @@ document.addEventListener('DOMContentLoaded', () => {
           id: `remote-${Date.now()}`,
           title: videoTitle,
           url: targetUrl,
-          category: 'Transferred Video',
-          sizeStr: 'Direct Stream',
+          category: 'AirDrop Stream',
+          sizeStr: 'Direct LAN',
           durationStr: '00:00',
           durationSec: 0,
           thumb: 'https://images.unsplash.com/photo-1536240478700-b869070f9279?w=600&auto=format&fit=crop&q=80',
@@ -1257,36 +1781,46 @@ document.addEventListener('DOMContentLoaded', () => {
         renderGalleries();
       }
 
-      // 1. Play on TV screen
-      tvVideo.srcObject = null;
-      tvVideo.src = targetUrl;
-      tvNowPlayingTitle.textContent = videoTitle;
-      tvVideo.muted = false;
-      state.isMutedOnTv = false;
-      tvVideo.play().then(() => {
-        if (tvPlayPrompt) tvPlayPrompt.classList.add('prompt-hidden');
-      }).catch(() => {
-        tvVideo.muted = true;
-        state.isMutedOnTv = true;
-        tvVideo.play().catch(() => {});
-        if (tvPlayPrompt) tvPlayPrompt.classList.remove('prompt-hidden');
-      });
-
-      // 2. Play on Phone screen too so Android device receives it!
-      phoneVideo.src = targetUrl;
-      phoneNowPlayingTitle.textContent = videoTitle;
-      phoneVideo.play().catch(() => {});
-      updatePlayPauseIcons(true);
-
-      const phoneActiveBadge = document.getElementById('phoneActiveBadge');
-      if (phoneActiveBadge) {
-        phoneActiveBadge.textContent = '● Stream Active (From Laptop)';
+      // 1. Play on TV screen if on TV/Laptop screen
+      if (state.currentMode === 'tv' || !isMobileDevice) {
+        tvNowPlayingTitle.textContent = videoTitle;
+        playWithFrameResume(tvVideo, targetUrl, resumeTime, videoTitle);
+        updatePlayPauseIcons(true);
       }
 
-      showToast(`Now Playing: '${videoTitle}'`, 'Streamed across local network');
+      // 2. Play on Phone screen if Phone is receiver (not originator)
+      if (isMobileDevice) {
+        phoneNowPlayingTitle.textContent = videoTitle;
+        const phoneActiveBadge = document.getElementById('phoneActiveBadge');
+
+        if (payload.fromDevice === state.deviceName || payload.fromId === state.myClientId) {
+          // Phone was the sender! Pause local video so audio doesn't clash with TV screen
+          phoneVideo.pause();
+          if (phoneActiveBadge) {
+            phoneActiveBadge.textContent = `📺 Streaming to TV Screen · Remote Active`;
+          }
+        } else {
+          // Phone is receiving the stream!
+          playWithFrameResume(phoneVideo, targetUrl, resumeTime, videoTitle);
+          if (phoneActiveBadge) {
+            phoneActiveBadge.textContent = '● Stream Active (From Laptop)';
+          }
+        }
+        updatePlayPauseIcons(true);
+      }
+
+      showToast(
+        `Now Playing: '${videoTitle}'`,
+        resumeTime > 0 ? `Resumed from ${formatTime(resumeTime)} (0-wait)` : 'Streamed across local network'
+      );
 
       if (tvSourceDeviceName) {
         tvSourceDeviceName.textContent = `Connected: ${senderName || 'Peer'} (${state.throughputSpeed})`;
+      }
+    } else if (type === 'SYNC_PROGRESS') {
+      if (payload && payload.title) {
+        saveResumeProgress(payload.title, payload.currentTime, payload.duration);
+        updateMovieResumeBadge(payload.title, payload.currentTime);
       }
     } else if (type === 'PLAY') {
       if (tvVideo.src || tvVideo.srcObject) {
@@ -1432,10 +1966,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const isMobile = isMobileDevice;
       const targetLabel = isMobile ? 'AirDrop to Screen' : 'AirDrop to Phone';
       const isWebMp4 = v.filename.toLowerCase().endsWith('.mp4');
+      const resumeTime = getResumeProgress(v.filename);
+      const isResumable = resumeTime > 0;
 
       const card = document.createElement('div');
       card.className = 'airdrop-movie-card';
-      card.title = `Tap to AirDrop '${v.filename}' with instant playback`;
+      card.title = isResumable ? `Resume '${v.filename}' from ${formatTime(resumeTime)}` : `Tap to AirDrop '${v.filename}' with instant playback`;
       card.innerHTML = `
         <div class="movie-card-info">
           <div class="movie-card-title" title="${v.filename}">🎬 ${v.filename}</div>
@@ -1445,20 +1981,22 @@ document.addEventListener('DOMContentLoaded', () => {
             <span>${v.sizeStr}</span>
             <span>·</span>
             ${isWebMp4 ? '<span style="color: #10b981; font-weight: 700;">⭐ Full Video & Audio</span>' : '<span style="color: #38bdf8; font-weight: 600;">⚡ LAN Stream</span>'}
+            ${isResumable ? `<span class="movie-badge-resume" style="color: #fbbf24; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35); padding: 2px 7px; border-radius: 999px; font-weight: 700; font-size: 10.5px;">⏱️ Resume at ${formatTime(resumeTime)}</span>` : ''}
           </div>
         </div>
         <button class="btn-movie-airdrop" title="Stream immediately to connected device">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-          <span>${targetLabel}</span>
+          <span>${isResumable ? `⚡ Resume (${formatTime(resumeTime)})` : targetLabel}</span>
         </button>
       `;
 
       const triggerAirDropStream = () => {
         const targetPeer = nearbyPeers[0] || state.targetDevice;
-        showToast(`AirDrop Streaming!`, `Serving '${v.filename}' to ${targetPeer.name}`);
+        const currentResumeSec = getResumeProgress(v.filename);
+        showToast(`AirDrop Streaming!`, `Serving '${v.filename}' to ${targetPeer.name}${currentResumeSec > 0 ? ' (from ' + formatTime(currentResumeSec) + ')' : ''}`);
 
         // 1. Adapt local role to sender
-        adaptRole('sender', targetPeer, { title: v.filename, url: fullStreamUrl });
+        adaptRole('sender', targetPeer, { title: v.filename, url: fullStreamUrl, seekTime: currentResumeSec });
 
         // 2. Broadcast AirDrop offer
         broadcastMessage('AIRDROP_OFFER', {
@@ -1469,7 +2007,8 @@ document.addEventListener('DOMContentLoaded', () => {
           video: {
             title: v.filename,
             url: fullStreamUrl,
-            sizeStr: v.sizeStr
+            sizeStr: v.sizeStr,
+            seekTime: currentResumeSec
           }
         });
 
@@ -1478,7 +2017,9 @@ document.addEventListener('DOMContentLoaded', () => {
           url: fullStreamUrl,
           title: v.filename,
           shouldAutoPlay: true,
-          seekTime: 0
+          seekTime: currentResumeSec,
+          targetPeerId: targetPeer.id,
+          fromDevice: state.deviceName
         });
       };
 
@@ -1499,25 +2040,31 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!laptopLibraryList || !videos) return;
     laptopLibraryList.innerHTML = '';
     videos.forEach((v) => {
+      const resumeTime = getResumeProgress(v.filename);
+      const isResumable = resumeTime > 0;
       const card = document.createElement('div');
       card.style.cssText = 'background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 12px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px;';
       card.innerHTML = `
         <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">
           <div style="font-weight: 600; color: #f1f5f9; font-size: 13px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="${v.filename}">🎬 ${v.filename}</div>
-          <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">${v.category} · ${v.sizeStr}</div>
+          <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">
+            ${v.category} · ${v.sizeStr}
+            ${isResumable ? ` · <span style="color: #fbbf24; font-weight: 700;">⏱️ ${formatTime(resumeTime)}</span>` : ''}
+          </div>
         </div>
         <button class="btn-send-to-phone" style="flex-shrink: 0; background: #0284c7; color: white; border: none; border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-          <span>AirDrop to Phone</span>
+          <span>${isResumable ? `Resume (${formatTime(resumeTime)})` : 'AirDrop to Phone'}</span>
         </button>
       `;
       const btn = card.querySelector('.btn-send-to-phone');
       btn.addEventListener('click', () => {
         const fullStreamUrl = `${getApiBaseUrl()}${v.streamUrl}`;
+        const currentResumeSec = getResumeProgress(v.filename);
         showToast(`AirDropping '${v.filename}'`, 'Streaming to Android Phone...');
 
         // Adapt sender role
-        adaptRole('sender', state.targetDevice, { title: v.filename, url: fullStreamUrl });
+        adaptRole('sender', state.targetDevice, { title: v.filename, url: fullStreamUrl, seekTime: currentResumeSec });
 
         broadcastMessage('AIRDROP_OFFER', {
           fromId: state.myClientId,
@@ -1526,7 +2073,8 @@ document.addEventListener('DOMContentLoaded', () => {
           video: {
             title: v.filename,
             url: fullStreamUrl,
-            sizeStr: v.sizeStr
+            sizeStr: v.sizeStr,
+            seekTime: currentResumeSec
           }
         });
 
@@ -1534,7 +2082,7 @@ document.addEventListener('DOMContentLoaded', () => {
           url: fullStreamUrl,
           title: v.filename,
           shouldAutoPlay: true,
-          seekTime: 0
+          seekTime: currentResumeSec
         });
       });
       laptopLibraryList.appendChild(card);

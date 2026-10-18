@@ -53,10 +53,15 @@ where
             (ack.device_id, ack.device_name, ack.platform, ack.session_id)
         }
         ProtocolMessage::Reject(reject) => {
-            return Err(LocalDropError::UnexpectedMessage(format!(
-                "Handshake rejected: {}",
-                reject.reason
-            )));
+            return Err(match reject.error_code {
+                2001 => LocalDropError::ProtocolVersionMismatch(ProtocolVersion::CURRENT.major, 0),
+                4001 => LocalDropError::PairingRejected,
+                4004 => LocalDropError::RateLimited,
+                _ => LocalDropError::UnexpectedMessage(format!(
+                    "Handshake rejected (code {}): {}",
+                    reject.error_code, reject.reason
+                )),
+            });
         }
         other => {
             return Err(LocalDropError::UnexpectedMessage(format!("{other:?}")));
@@ -73,7 +78,7 @@ where
 
     // 4. Receive ACCEPT
     let negotiated_chunk_size = match read_message(stream).await? {
-        ProtocolMessage::Accept(accept) => accept.negotiated_chunk_size,
+        ProtocolMessage::Accept(accept) => accept.negotiated_chunk_size.max(16 * 1024),
         ProtocolMessage::Reject(reject) => {
             return Err(LocalDropError::UnexpectedMessage(format!(
                 "Capabilities rejected: {}",
@@ -152,7 +157,7 @@ where
         other => return Err(LocalDropError::UnexpectedMessage(format!("{other:?}"))),
     };
 
-    let negotiated_chunk_size = caps.max_chunk_size.min(max_chunk_size);
+    let negotiated_chunk_size = caps.max_chunk_size.min(max_chunk_size).max(16 * 1024);
 
     // 4. Send ACCEPT
     let accept = ProtocolMessage::Accept(AcceptMessage {

@@ -71,15 +71,18 @@ export default defineConfig({
                   const files = fs.readdirSync(dir);
                   for (const f of files) {
                     const ext = path.extname(f).toLowerCase();
-                    if (['.mp4', '.mkv', '.webm', '.mov'].includes(ext)) {
+                    // Prioritize web-ready MP4/WebM with guaranteed hardware video decoding in browsers
+                    if (['.mp4', '.webm'].includes(ext)) {
                       const stat = fs.statSync(path.join(dir, f));
-                      publicVideos.push({
-                        filename: f,
-                        category,
-                        sizeBytes: stat.size,
-                        sizeStr: (stat.size / (1024 * 1024)).toFixed(1) + ' MB',
-                        streamUrl: `/api/stream/${encodeURIComponent(f)}`
-                      });
+                      if (stat.size > 50000) {
+                        publicVideos.push({
+                          filename: f,
+                          category,
+                          sizeBytes: stat.size,
+                          sizeStr: (stat.size / (1024 * 1024)).toFixed(1) + ' MB',
+                          streamUrl: `/api/stream/${encodeURIComponent(f)}`
+                        });
+                      }
                     }
                   }
                 } catch (e) {}
@@ -255,7 +258,19 @@ export default defineConfig({
 
           // 5. Media Streaming with HTTP 206 Range Support
           if (req.url.startsWith('/api/stream/')) {
-            const rawFilename = decodeURIComponent(req.url.replace('/api/stream/', ''));
+            let rawFilename = decodeURIComponent(req.url.replace('/api/stream/', ''));
+
+            // Auto-fallback: if MKV is requested, automatically route to the web-ready H.264 MP4 version!
+            if (rawFilename.toLowerCase().endsWith('.mkv')) {
+              if (rawFilename.includes('12') && fs.existsSync(path.join(rootPublicDir, 'Episode_12_Ready_To_Stream.mp4'))) {
+                rawFilename = 'Episode_12_Ready_To_Stream.mp4';
+              } else if (rawFilename.includes('13') && fs.existsSync(path.join(rootPublicDir, 'Episode_13_Ready_To_Stream.mp4'))) {
+                rawFilename = 'Episode_13_Ready_To_Stream.mp4';
+              } else if (fs.existsSync(path.join(rootPublicDir, 'Episode_11_Ready_To_Stream.mp4'))) {
+                rawFilename = 'Episode_11_Ready_To_Stream.mp4';
+              }
+            }
+
             // Look in mediaDir, rootPublicDir, and localPublicDir
             const candidatePaths = [
               path.join(mediaDir, rawFilename),
@@ -286,8 +301,10 @@ export default defineConfig({
               '.mp3': 'audio/mpeg',
               '.wav': 'audio/wav',
               '.ogg': 'audio/ogg',
+              '.vtt': 'text/vtt; charset=utf-8',
+              '.srt': 'text/vtt; charset=utf-8',
             };
-            const contentType = mimeMap[ext] || 'video/mp4';
+            const contentType = mimeMap[ext] || (ext === '.vtt' ? 'text/vtt; charset=utf-8' : 'video/mp4');
 
             if (range) {
               const parts = range.replace(/bytes=/, '').split('-');

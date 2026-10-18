@@ -1133,6 +1133,33 @@ body.mode-dual-view .tv-column-wrapper {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
+}
+
+.tv-hud-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.tv-hud-btn-mini {
+  background: rgba(14, 19, 34, 0.7);
+  border: 1px solid var(--border-glass);
+  color: #fff;
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tv-hud-btn-mini:hover {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: #38bdf8;
 }
 
 .tv-now-playing-pill {
@@ -1147,6 +1174,7 @@ body.mode-dual-view .tv-column-wrapper {
   color: #fff;
   font-size: 14px;
   font-weight: 700;
+  pointer-events: auto;
 }
 
 .pill-signal {
@@ -1167,11 +1195,20 @@ body.mode-dual-view .tv-column-wrapper {
   font-weight: 700;
 }
 
+/* TV Bottom Controls Group */
+.tv-hud-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
 /* TV Big Timeline */
 .tv-timeline-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  pointer-events: auto;
 }
 
 .tv-timeline-track {
@@ -1180,6 +1217,23 @@ body.mode-dual-view .tv-column-wrapper {
   background: rgba(255, 255, 255, 0.2);
   border-radius: 9999px;
   position: relative;
+  cursor: pointer;
+  transition: height 0.15s ease;
+}
+
+.tv-timeline-track:hover {
+  height: 12px;
+}
+
+.tv-timeline-buffered {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 0%;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 9999px;
+  pointer-events: none;
 }
 
 .tv-timeline-fill {
@@ -1191,6 +1245,7 @@ body.mode-dual-view .tv-column-wrapper {
   background: linear-gradient(90deg, #6366f1, #06b6d4, #10b981);
   border-radius: 9999px;
   box-shadow: 0 0 12px rgba(6, 182, 212, 0.6);
+  pointer-events: none;
 }
 
 .tv-timeline-marker {
@@ -1203,6 +1258,12 @@ body.mode-dual-view .tv-column-wrapper {
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 0 15px #06b6d4;
+  pointer-events: none;
+  transition: transform 0.1s ease;
+}
+
+.tv-timeline-track:hover .tv-timeline-marker {
+  transform: translate(-50%, -50%) scale(1.2);
 }
 
 .tv-time-row {
@@ -1217,6 +1278,146 @@ body.mode-dual-view .tv-column-wrapper {
 .tv-time-resumed {
   color: #38bdf8;
   font-weight: 600;
+}
+
+/* -------------------------------------------------------------------------
+   TV Native Cinema Controls Bar
+   ------------------------------------------------------------------------- */
+.tv-cinema-controls-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 8px 16px;
+  pointer-events: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  flex-wrap: wrap;
+}
+
+.tv-controls-group-left,
+.tv-controls-group-center,
+.tv-controls-group-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tv-ctrl-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #f8fafc;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tv-ctrl-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.tv-ctrl-btn-primary {
+  background: linear-gradient(135deg, #6366f1, #38bdf8);
+  border: none;
+  color: #ffffff;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 18px rgba(99, 102, 241, 0.5);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tv-ctrl-btn-primary:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 22px rgba(56, 189, 248, 0.7);
+}
+
+.tv-btn-stop:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #f87171;
+}
+
+.tv-volume-slider {
+  width: 80px;
+  height: 6px;
+  -webkit-appearance: none;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+}
+
+.tv-volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.8);
+  cursor: pointer;
+}
+
+.tv-volume-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #94a3b8;
+  min-width: 34px;
+}
+
+.tv-subtitle-picker-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  padding: 4px 10px;
+  border-radius: 8px;
+}
+
+.tv-sub-icon {
+  font-size: 13px;
+}
+
+.tv-select-dropdown {
+  background: transparent;
+  border: none;
+  color: #f8fafc;
+  font-size: 11.5px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+}
+
+.tv-select-dropdown option {
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+/* Subtitle Cue Text Styling for HTML5 Video Tracks */
+::cue {
+  color: #ffffff;
+  background-color: rgba(0, 0, 0, 0.75);
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  font-size: 1.12rem;
+  font-weight: 600;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.95);
+  border-radius: 4px;
+  padding: 2px 8px;
 }
 
 /* -------------------------------------------------------------------------
@@ -2414,5 +2615,111 @@ body.mode-dual-view .tv-column-wrapper {
 .btn-movie-airdrop svg {
   flex-shrink: 0;
 }
+
+/* -------------------------------------------------------------------------
+   STREAM HANDOFF QUICK BAR (Zero-wait device switching)
+   ------------------------------------------------------------------------- */
+.stream-handoff-bar {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 12px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.stream-handoff-bar.phone-handoff {
+  margin: 10px 12px 6px;
+  padding: 6px 10px;
+}
+
+.handoff-bar-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #38bdf8;
+  white-space: nowrap;
+}
+
+.handoff-device-chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.handoff-chip-btn {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(56, 189, 248, 0.25));
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #f1f5f9;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.handoff-chip-btn:hover {
+  background: linear-gradient(135deg, #0284c7, #2563eb);
+  border-color: #38bdf8;
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(56, 189, 248, 0.4);
+}
+
+.handoff-chip-btn.active-target {
+  background: #10b981;
+  color: #022c22;
+  border-color: #34d399;
+}
+
+/* -------------------------------------------------------------------------
+   MOBILE RESPONSIVENESS FOR AIRDROP RADAR & MOVIE GRID
+   ------------------------------------------------------------------------- */
+@media (max-width: 650px) {
+  .airdrop-radar-section {
+    padding: 10px 14px;
+  }
+  .airdrop-radar-container {
+    gap: 12px;
+  }
+  .my-device-identity {
+    width: 100%;
+    padding: 8px 14px;
+  }
+  .airdrop-peers-zone {
+    width: 100%;
+    min-width: 0;
+  }
+  .airdrop-movie-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .airdrop-movie-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+  .movie-card-info {
+    width: 100%;
+  }
+  .btn-movie-airdrop {
+    width: 100%;
+    justify-content: center;
+    padding: 10px 16px;
+  }
+}
+
+
 
 

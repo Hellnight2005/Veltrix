@@ -38,11 +38,13 @@ impl TransferState {
 
             // Authenticating
             (Self::Authenticating, Self::Preparing) => true,
+            (Self::Authenticating, Self::Interrupted) => true,
             (Self::Authenticating, Self::Failed) => true,
             (Self::Authenticating, Self::Cancelled) => true,
 
             // Preparing
             (Self::Preparing, Self::Transferring) => true,
+            (Self::Preparing, Self::Interrupted) => true,
             (Self::Preparing, Self::Failed) => true,
             (Self::Preparing, Self::Cancelled) => true,
 
@@ -66,6 +68,7 @@ impl TransferState {
             // Resuming
             (Self::Resuming, Self::Preparing) => true,
             (Self::Resuming, Self::Transferring) => true,
+            (Self::Resuming, Self::Interrupted) => true,
             (Self::Resuming, Self::Failed) => true,
             (Self::Resuming, Self::Cancelled) => true,
 
@@ -76,6 +79,7 @@ impl TransferState {
 
             // Verifying
             (Self::Verifying, Self::Completed) => true,
+            (Self::Verifying, Self::Cancelled) => true,
             (Self::Verifying, Self::Failed) => true,
 
             // Terminal states
