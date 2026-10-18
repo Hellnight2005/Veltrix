@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 1. Initial State & AirDrop Device Identity & Pairing Store
   // ---------------------------------------------------------------------------
   const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 800;
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
   let myClientId = localStorage.getItem('localdrop_client_id');
   if (!myClientId) {
@@ -125,24 +126,43 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      videoEl.muted = false;
-      videoEl.volume = 1.0;
-      state.isMutedOnTv = false;
-      if (phoneVolumeLabel) phoneVolumeLabel.textContent = 'TV Audio: ON';
+      const isTvTarget = (videoEl === tvVideo);
+      const isCastingOrDual = (state.currentMode === 'tv' || state.currentMode === 'dual' || !isMobileDevice || state.activeRole === 'sender');
+
+      if (isTvTarget) {
+        // TV Screen is the active audio speaker
+        if (phoneVideo) {
+          phoneVideo.muted = true;
+          phoneVideo.volume = 0;
+        }
+        videoEl.muted = state.isMutedOnTv;
+        videoEl.volume = 1.0;
+      } else {
+        // phoneVideo
+        if (isCastingOrDual) {
+          // When casting to TV or in dual view, phoneVideo MUST be muted to prevent double audio!
+          videoEl.muted = true;
+          videoEl.volume = 0;
+        } else {
+          videoEl.muted = false;
+          videoEl.volume = 1.0;
+        }
+      }
+
+      if (phoneVolumeLabel) phoneVolumeLabel.textContent = state.isMutedOnTv ? 'TV Audio: MUTED' : 'TV Audio: ON';
 
       const playPromise = videoEl.play();
       if (playPromise !== undefined) {
         playPromise
           .then(() => {
-            if (tvPlayPrompt) tvPlayPrompt.classList.add('prompt-hidden');
+            if (isTvTarget && tvPlayPrompt) tvPlayPrompt.classList.add('prompt-hidden');
           })
           .catch((err) => {
-            console.warn('Autoplay unmuted blocked by policy, trying muted with prompt:', err);
+            console.warn('Playback blocked by iOS/browser autoplay policy, retrying muted:', err);
             videoEl.muted = true;
-            state.isMutedOnTv = true;
-            if (phoneVolumeLabel) phoneVolumeLabel.textContent = 'TV Audio: MUTED';
+            if (isTvTarget) state.isMutedOnTv = true;
             videoEl.play().catch(() => {});
-            if (videoEl === tvVideo && tvPlayPrompt) {
+            if (isTvTarget && tvPlayPrompt) {
               tvPlayPrompt.classList.remove('prompt-hidden');
             }
           });
@@ -1452,6 +1472,8 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
           const stream = phoneVideo.captureStream ? phoneVideo.captureStream() : (phoneVideo.mozCaptureStream ? phoneVideo.mozCaptureStream() : null);
           if (stream) {
+            phoneVideo.muted = true;
+            phoneVideo.volume = 0;
             startWebRtcSender(stream, file.name);
           }
         } catch (webrtcErr) {
@@ -1511,22 +1533,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const resumeTime = (seekTime > 0) ? seekTime : getResumeProgress(media.title);
 
-    const isTvActive = (state.currentMode === 'tv' || !isMobileDevice);
+    const isTvActive = (state.currentMode === 'tv' || state.currentMode === 'dual' || !isMobileDevice);
     if (isTvActive) {
-      playWithFrameResume(tvVideo, media.url, resumeTime, media.title);
-      if (isMobileDevice) {
+      // TV plays with audio, phoneVideo is muted and paused
+      if (phoneVideo) {
+        phoneVideo.muted = true;
+        phoneVideo.volume = 0;
         phoneVideo.pause();
       }
+      playWithFrameResume(tvVideo, media.url, resumeTime, media.title);
     } else {
       // Mobile device in Phone mode:
-      // If streaming to TV/Laptop (or remote peer selected), pause local playback on phone!
       if (!isRemote) {
+        phoneVideo.muted = true;
+        phoneVideo.volume = 0;
         phoneVideo.pause();
         const phoneActiveBadge = document.getElementById('phoneActiveBadge');
         if (phoneActiveBadge) {
           phoneActiveBadge.textContent = `📺 Streaming to ${state.targetDevice?.name || 'Screen'} · Remote Active`;
         }
       } else {
+        if (tvVideo) {
+          tvVideo.muted = true;
+          tvVideo.volume = 0;
+          tvVideo.pause();
+        }
         playWithFrameResume(phoneVideo, media.url, resumeTime, media.title);
       }
     }
@@ -1565,14 +1596,21 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function togglePlayPause() {
-    const isTvActive = (state.currentMode === 'tv' || !isMobileDevice);
+    const isTvActive = (state.currentMode === 'tv' || state.currentMode === 'dual' || !isMobileDevice);
     const targetEl = isTvActive ? tvVideo : phoneVideo;
+    const secondaryEl = isTvActive ? phoneVideo : tvVideo;
+
     if (targetEl.paused || targetEl.ended) {
+      if (isTvActive && secondaryEl) {
+        secondaryEl.muted = true;
+        secondaryEl.volume = 0;
+      }
       targetEl.play().catch(() => {});
       updatePlayPauseIcons(true);
       broadcastMessage('PLAY', { currentTime: targetEl.currentTime });
     } else {
       targetEl.pause();
+      if (secondaryEl) secondaryEl.pause();
       updatePlayPauseIcons(false);
       state.pausedHandoffTimestamp = targetEl.currentTime;
       broadcastMessage('PAUSE', { currentTime: state.pausedHandoffTimestamp });
@@ -1675,19 +1713,36 @@ document.addEventListener('DOMContentLoaded', () => {
   // 10. Event Listeners: Phone & TV Video Sync & Audio Activation
   // ---------------------------------------------------------------------------
   function ensureAudioUnmuted() {
-    if (tvVideo) {
-      tvVideo.muted = false;
-      tvVideo.volume = 1.0;
-      state.isMutedOnTv = false;
-      if (phoneVolumeLabel) phoneVolumeLabel.textContent = 'TV Audio: ON';
-      if (tvVolumeLabel) tvVolumeLabel.textContent = '100%';
-      if (tvVolumeSlider) tvVolumeSlider.value = 100;
-      updateTvMuteIcon(false);
-      if (tvPlayPrompt) tvPlayPrompt.classList.add('prompt-hidden');
-    }
-    if (phoneVideo) {
-      phoneVideo.muted = false;
-      phoneVideo.volume = 1.0;
+    const isCastingOrDual = (state.currentMode === 'tv' || state.currentMode === 'dual' || !isMobileDevice || state.activeRole === 'sender');
+
+    if (isCastingOrDual) {
+      // TV is the sole active audio output
+      if (tvVideo) {
+        tvVideo.muted = false;
+        tvVideo.volume = 1.0;
+        state.isMutedOnTv = false;
+        if (phoneVolumeLabel) phoneVolumeLabel.textContent = 'TV Audio: ON';
+        if (tvVolumeLabel) tvVolumeLabel.textContent = '100%';
+        if (tvVolumeSlider) tvVolumeSlider.value = 100;
+        updateTvMuteIcon(false);
+        if (tvPlayPrompt) tvPlayPrompt.classList.add('prompt-hidden');
+      }
+      // CRITICAL: phoneVideo MUST remain muted to prevent echo / double audio!
+      if (phoneVideo) {
+        phoneVideo.muted = true;
+        phoneVideo.volume = 0;
+      }
+    } else {
+      // Standalone phone mode
+      if (phoneVideo) {
+        phoneVideo.muted = false;
+        phoneVideo.volume = 1.0;
+      }
+      if (tvVideo) {
+        tvVideo.muted = true;
+        tvVideo.volume = 0;
+        tvVideo.pause();
+      }
     }
   }
 
@@ -1851,9 +1906,13 @@ document.addEventListener('DOMContentLoaded', () => {
   btnHandoffToTV.addEventListener('click', () => {
     stopHandoffModal.classList.remove('modal-open');
     tvVideo.currentTime = state.pausedHandoffTimestamp;
-    phoneVideo.currentTime = state.pausedHandoffTimestamp;
+    if (phoneVideo) {
+      phoneVideo.muted = true;
+      phoneVideo.volume = 0;
+      phoneVideo.pause();
+    }
+    tvVideo.muted = state.isMutedOnTv;
     tvVideo.play().catch(() => {});
-    phoneVideo.play().catch(() => {});
     showToast(`Streaming Resumed on TV`, `Continuing from ${formatTime(state.pausedHandoffTimestamp)}`);
   });
 
@@ -2160,8 +2219,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // 1. Play on TV screen if on TV/Laptop screen
-      if (state.currentMode === 'tv' || !isMobileDevice) {
+      if (state.currentMode === 'tv' || state.currentMode === 'dual' || !isMobileDevice) {
         tvNowPlayingTitle.textContent = videoTitle;
+        if (phoneVideo) {
+          phoneVideo.muted = true;
+          phoneVideo.volume = 0;
+          phoneVideo.pause();
+        }
         playWithFrameResume(tvVideo, targetUrl, resumeTime, videoTitle);
         updatePlayPauseIcons(true);
       }
@@ -2201,17 +2265,29 @@ document.addEventListener('DOMContentLoaded', () => {
         updateMovieResumeBadge(payload.title, payload.currentTime);
       }
     } else if (type === 'PLAY') {
-      if (tvVideo.src || tvVideo.srcObject) {
-        tvVideo.play().catch(() => {});
-      }
-      if (phoneVideo.src) {
-        phoneVideo.play().catch(() => {});
+      const isTvActive = (state.currentMode === 'tv' || state.currentMode === 'dual' || !isMobileDevice);
+      if (isTvActive) {
+        if (phoneVideo) {
+          phoneVideo.muted = true;
+          phoneVideo.volume = 0;
+        }
+        if (tvVideo.src || tvVideo.srcObject) {
+          tvVideo.play().catch(() => {});
+        }
+      } else {
+        if (tvVideo) {
+          tvVideo.muted = true;
+          tvVideo.pause();
+        }
+        if (phoneVideo.src) {
+          phoneVideo.play().catch(() => {});
+        }
       }
       updatePlayPauseIcons(true);
       if (tvPlayPrompt) tvPlayPrompt.classList.add('prompt-hidden');
     } else if (type === 'PAUSE') {
-      tvVideo.pause();
-      phoneVideo.pause();
+      if (tvVideo) tvVideo.pause();
+      if (phoneVideo) phoneVideo.pause();
       updatePlayPauseIcons(false);
       state.pausedHandoffTimestamp = payload.currentTime;
     } else if (type === 'SEEK') {
@@ -2498,10 +2574,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         tvVideo.src = fullStreamUrl;
         tvNowPlayingTitle.textContent = file.name;
+        tvVideo.muted = state.isMutedOnTv;
         tvVideo.play().catch(() => {});
         phoneVideo.src = fullStreamUrl;
         phoneNowPlayingTitle.textContent = file.name;
-        phoneVideo.play().catch(() => {});
+        phoneVideo.muted = true;
+        phoneVideo.volume = 0;
+        phoneVideo.pause();
       }).catch((err) => {
         showToast('Transfer Error', err.message);
       });
