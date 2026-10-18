@@ -41,6 +41,10 @@
       </div>
 
       <div class="view-controls">
+        <a id="btnDownloadApk" href="/LocalDrop-v1.0-debug.apk" download="LocalDrop-v1.0-debug.apk" class="btn-ghost-sm" title="Download Android APK" style="text-decoration: none; color: #10b981; border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.08);">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+          <span>📦 Download APK (v1.0)</span>
+        </a>
         <button id="btnToggleMobileFrame" class="btn-ghost-sm" title="Toggle Phone Shell Container">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="20" x="5" y="2" rx="3"/><path d="M12 18h.01"/></svg>
           <span id="frameToggleLabel">Shell: ON</span>
@@ -48,6 +52,80 @@
       </div>
     </div>
   </header>
+
+  <!-- ========================================================================= -->
+  <!-- AIRDROP RADAR & NEARBY PEERS SECTION                                     -->
+  <!-- ========================================================================= -->
+  <section class="airdrop-radar-section" id="airdropRadarSection">
+    <div class="airdrop-radar-container">
+      
+      <!-- My Device Identity Badge -->
+      <div class="my-device-identity" id="myDeviceIdentity">
+        <div class="radar-pulse-wrap">
+          <div class="radar-ripple ripple-1"></div>
+          <div class="radar-ripple ripple-2"></div>
+          <div class="my-device-avatar" id="myDeviceAvatar">💻</div>
+        </div>
+        <div class="my-device-meta">
+          <div class="my-device-name-row">
+            <span class="my-device-name" id="myDeviceName">Abhijeet's Laptop</span>
+            <span class="badge-online">● Online</span>
+          </div>
+          <div class="my-device-sub" id="myDeviceSub">Wi-Fi LAN · 192.168.0.103:5173</div>
+        </div>
+      </div>
+
+      <div class="airdrop-divider"></div>
+
+      <!-- Discovered Nearby AirDrop Peers Row -->
+      <div class="airdrop-peers-zone">
+        <div class="airdrop-zone-header">
+          <div class="zone-title-group">
+            <span class="airdrop-title">⚡ Nearby AirDrop Devices</span>
+            <span class="airdrop-subtext">Automatic discovery · Tap any device to pair or beam video</span>
+          </div>
+          <span class="airdrop-peer-count" id="airdropPeerCount">Scanning LAN...</span>
+        </div>
+        <div class="airdrop-peers-list" id="airdropPeersList">
+          <div class="peer-scanning-skeleton">
+            <span class="pulse-loader"></span>
+            <span>Listening for nearby LocalDrop peers on local Wi-Fi...</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ========================================================================= -->
+  <!-- AIRDROP MOVIE STREAM SERVER (Instant 0-Wait Streaming to Any Device)      -->
+  <!-- ========================================================================= -->
+  <section class="airdrop-media-server-section" id="airdropMediaServerSection">
+    <div class="airdrop-media-container">
+      <div class="airdrop-media-header">
+        <div class="airdrop-media-title-group">
+          <div class="airdrop-media-title-row">
+            <span class="airdrop-media-icon">🎬</span>
+            <span class="airdrop-media-title">AirDrop Movie Streams</span>
+            <span class="media-live-tag">● Instant Play (0-Wait)</span>
+          </div>
+          <p class="airdrop-media-sub">Tap any movie on your phone or laptop to instantly stream and play full-screen on the connected device</p>
+        </div>
+        <div class="airdrop-media-badges">
+          <span class="media-count-badge" id="airdropMediaCount">Scanning...</span>
+        </div>
+      </div>
+      <div class="airdrop-movie-grid" id="airdropMovieGrid">
+        <div class="peer-scanning-skeleton">
+          <span class="pulse-loader"></span>
+          <span>Loading movies from LocalDrop media server...</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Hidden File Input for Direct Peer AirDrop -->
+  <input type="file" id="airdropPeerFileInput" accept="video/*,audio/*" style="display: none;">
 
   <!-- Root Viewport Layout Container -->
   <main class="main-workspace-container" id="mainWorkspaceContainer">
@@ -92,6 +170,40 @@
             </button>
           </div>
 
+          <!-- Native App Download Banner (Mobile only) -->
+          <div class="phone-apk-banner" style="display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(6, 78, 59, 0.25)); border: 1px solid rgba(16, 185, 129, 0.35); padding: 10px 14px; border-radius: 12px; margin-bottom: 12px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 20px;">📱</span>
+              <div>
+                <div style="font-size: 13px; font-weight: 700; color: #10b981;">Native Android App Ready</div>
+                <div style="font-size: 11px; color: #94a3b8;">Install standalone APK (4.1 MB)</div>
+              </div>
+            </div>
+            <a href="/LocalDrop-v1.0-debug.apk" download="LocalDrop-v1.0-debug.apk" style="display: inline-flex; align-items: center; gap: 6px; background: #10b981; color: #022c22; font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 8px; text-decoration: none;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+              Install
+            </a>
+          </div>
+
+          <!-- Discovered Receiver Hero Card on Phone -->
+          <section class="target-screen-hero-card" id="btnHeroSelectVideo" title="Tap to select a video and stream to laptop">
+            <div class="screen-hero-top">
+              <div class="screen-icon-bubble">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="15" x="2" y="3" rx="2"/><path d="M12 18v4"/><path d="M8 22h8"/></svg>
+                <span class="live-dot"></span>
+              </div>
+              <div class="screen-hero-info">
+                <span class="screen-tag">Detected on Local Wi-Fi</span>
+                <h3 class="screen-hero-title" id="heroTargetDeviceTitle">Laptop TV Screen</h3>
+                <p class="screen-hero-sub">Tap here to choose a video from your gallery and stream it</p>
+              </div>
+            </div>
+            <button class="btn-hero-cast" id="btnHeroCastAction">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/><line x1="2" x2="2.01" y1="20" y2="20"/></svg>
+              <span>Choose Video & Cast to Screen</span>
+            </button>
+          </section>
+
           <!-- Storage & Media Access Permission Card -->
           <section class="permission-access-card" id="permissionAccessCard">
             <div class="permission-icon-box">
@@ -116,9 +228,7 @@
             
             <!-- Video Preview Container on Phone -->
             <div class="phone-video-container" id="phoneVideoContainer">
-              <video id="phoneVideoPlayer" preload="metadata" playsinline muted>
-                <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4" type="video/mp4">
-              </video>
+              <video id="phoneVideoPlayer" preload="metadata" playsinline muted></video>
 
               <!-- Video Overlay State -->
               <div class="phone-video-overlay" id="phoneVideoOverlay">
@@ -129,8 +239,8 @@
 
               <!-- Top Bar Over Video -->
               <div class="phone-video-topbar">
-                <span class="active-badge" id="phoneActiveBadge">● Serving to TV</span>
-                <span class="movie-pill" id="phoneNowPlayingTitle">Tears of Steel (4K)</span>
+                <span class="active-badge" id="phoneActiveBadge">● Ready to Cast</span>
+                <span class="movie-pill" id="phoneNowPlayingTitle">No Video Selected</span>
               </div>
 
               <!-- Stream Timeline Scrubber -->
@@ -243,7 +353,7 @@
           </div>
           <div class="tv-connection-badge">
             <span class="pulse-emerald"></span>
-            <span id="tvSourceDeviceName">Connected to Phone: Pixel 9 Pro (192.168.1.54)</span>
+            <span id="tvSourceDeviceName">Ready · Waiting for Phone Stream</span>
           </div>
           <div class="tv-meta-status">
             <span class="tv-speed-chip" id="tvSpeedChip">78.4 MB/s Direct LAN</span>
@@ -255,16 +365,62 @@
         <div class="tv-player-viewport">
           <div class="tv-ambient-glow" id="tvAmbientGlow"></div>
           
-          <video id="tvVideoPlayer" preload="auto" playsinline>
-            <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4" type="video/mp4">
-          </video>
+          <video id="tvVideoPlayer" preload="auto" playsinline muted poster="https://images.unsplash.com/photo-1534447677768-be436bb09401?w=1200&auto=format&fit=crop&q=80"></video>
+
+          <!-- TV Standby Screen (waiting for phone stream) -->
+          <div class="tv-standby-screen" id="tvStandbyScreen">
+            <div class="standby-content-box">
+              <div class="standby-radar">
+                <div class="radar-circle circle-1"></div>
+                <div class="radar-circle circle-2"></div>
+                <div class="radar-circle circle-3"></div>
+                <div class="standby-radar-icon">
+                  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="15" x="2" y="3" rx="2"/><path d="M12 18v4"/><path d="M8 22h8"/></svg>
+                </div>
+              </div>
+              <h2 class="standby-title">Laptop Screen Ready</h2>
+              <p class="standby-subtitle">Waiting for video stream from your phone</p>
+              <div class="standby-instructions-card">
+                <span class="inst-step">1</span>
+                <span>Open on phone: <strong id="standbyPhoneUrl">http://192.168.0.101:5173</strong></span>
+              </div>
+              <div class="standby-instructions-card">
+                <span class="inst-step">2</span>
+                <span>Tap <strong>"Choose Video & Cast"</strong> to play any video from your phone</span>
+              </div>
+
+              <!-- Live Transfer Progress on Standby Screen -->
+              <div id="standbyProgressWrap" style="display: none; width: 100%; margin-top: 14px; background: rgba(14, 19, 34, 0.9); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 14px; padding: 12px 16px;">
+                <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; color: #38bdf8; margin-bottom: 6px;">
+                  <span id="standbyProgressLabel">Streaming Video from Phone...</span>
+                  <span id="standbyProgressPercent">0%</span>
+                </div>
+                <div style="width: 100%; height: 8px; background: rgba(255, 255, 255, 0.1); border-radius: 999px; overflow: hidden;">
+                  <div id="standbyProgressFill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #6366f1, #38bdf8); transition: width 0.2s;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TV Video Play / Receiver Prompt -->
+          <div class="tv-play-prompt prompt-hidden" id="tvPlayPrompt">
+            <div class="tv-prompt-card">
+              <div class="tv-prompt-icon">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              </div>
+              <div class="tv-prompt-text">
+                <h3>TV Receiver Active</h3>
+                <p>Click here to enable audio playback</p>
+              </div>
+            </div>
+          </div>
 
           <!-- TV Video HUD Overlay -->
           <div class="tv-hud-overlay" id="tvHudOverlay">
             <div class="tv-hud-top">
               <div class="tv-now-playing-pill">
                 <span class="pill-signal"></span>
-                <span id="tvNowPlayingTitle">Tears of Steel (4K Sci-Fi)</span>
+                <span id="tvNowPlayingTitle">Ready to Stream</span>
               </div>
               <div class="tv-stream-tag" id="tvStreamModeTag">Streaming from Phone Gallery</div>
             </div>
@@ -297,6 +453,31 @@
 
           <div class="tv-cards-carousel" id="tvCardsCarousel">
             <!-- Rendered via JavaScript -->
+          </div>
+        </section>
+
+        <!-- Laptop Video Sender (Send video files directly from Laptop to Android Phone / Emulator!) -->
+        <section class="laptop-video-sender-tray" style="margin-top: 18px; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 16px; padding: 18px 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <h3 style="font-size: 16px; font-weight: 700; color: #f8fafc; display: flex; align-items: center; gap: 8px;">
+                <span>💻 Laptop Video Sender & Library</span>
+                <span style="font-size: 11px; background: rgba(56, 189, 248, 0.2); color: #38bdf8; padding: 2px 8px; border-radius: 999px; font-weight: 600;">Engine Active</span>
+              </h3>
+              <p style="font-size: 12px; color: #94a3b8; margin-top: 2px;">Share any video from this laptop directly to the connected Android Phone / Emulator</p>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button id="btnPickLaptopVideo" class="btn-hero-cast" style="padding: 8px 16px; font-size: 13px; background: linear-gradient(135deg, #0284c7, #2563eb); border: none; border-radius: 8px; color: white; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                <span>📁 Pick Video from Laptop & Send</span>
+              </button>
+              <input type="file" id="laptopMediaFileInput" accept="video/*,audio/*" style="display: none;">
+            </div>
+          </div>
+
+          <!-- Quick Share Local Laptop Library Videos -->
+          <div id="laptopLibraryList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">
+            <!-- Rendered dynamically from /api/server-info -->
           </div>
         </section>
       </div>
@@ -394,6 +575,44 @@
             <h4 class="choice-title">Pick Another Video from Phone Gallery</h4>
             <p class="choice-desc">Browse local storage and switch stream on TV</p>
           </div>
+        </button>
+      </div>
+    </div>
+  <!-- ========================================================================= -->
+  <!-- MODAL: AirDrop Incoming Transfer (Apple AirDrop Experience)               -->
+  <!-- ========================================================================= -->
+  <aside class="modal-backdrop" id="airDropReceiveModal">
+    <div class="airdrop-incoming-sheet">
+      <div class="airdrop-sheet-handle"></div>
+      <div class="airdrop-incoming-top">
+        <div class="airdrop-source-avatar" id="airDropSenderAvatar">💻</div>
+        <div class="airdrop-incoming-info">
+          <span class="airdrop-incoming-tag">AirDrop Video Share</span>
+          <h3 class="airdrop-sender-heading" id="airDropSenderTitle">Abhijeet's Laptop</h3>
+          <p class="airdrop-prompt-sub">would like to share a video with you:</p>
+        </div>
+      </div>
+
+      <div class="airdrop-file-preview-card">
+        <div class="airdrop-preview-icon">🎬</div>
+        <div class="airdrop-file-meta">
+          <h4 class="airdrop-file-name" id="airDropFileName">sample_video.mp4</h4>
+          <span class="airdrop-file-size" id="airDropFileSize">0.5 MB · Stream Ready</span>
+        </div>
+      </div>
+
+      <div class="airdrop-trust-toggle">
+        <label class="trust-checkbox-label">
+          <input type="checkbox" id="chkAlwaysAutoAccept" checked>
+          <span>Remember & auto-play from this paired device in the future</span>
+        </label>
+      </div>
+
+      <div class="airdrop-modal-actions">
+        <button class="btn-airdrop-decline" id="btnAirDropDecline">Decline</button>
+        <button class="btn-airdrop-accept" id="btnAirDropAccept">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <span>Accept & Play on Screen</span>
         </button>
       </div>
     </div>

@@ -28,4 +28,5 @@ apps/localdrop_web/android/.gradle/
 apps/localdrop_web/android/app/build/
 apps/localdrop_web/android/build/
 apps/localdrop_web/android/capacitor-cordova-android-plugins/build/
+apps/localdrop_web/.media_cache/
 
