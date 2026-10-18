@@ -32,11 +32,15 @@ export default defineConfig({
       configureServer(server) {
         const sseClients = new Set();
         const mediaDir = path.resolve(process.cwd(), '.media_cache');
+        const inboxDir = path.resolve(process.cwd(), '../../inbox');
         const rootPublicDir = path.resolve(process.cwd(), '../../public');
         const localPublicDir = path.resolve(process.cwd(), 'public');
 
         if (!fs.existsSync(mediaDir)) {
           fs.mkdirSync(mediaDir, { recursive: true });
+        }
+        if (!fs.existsSync(inboxDir)) {
+          fs.mkdirSync(inboxDir, { recursive: true });
         }
 
         const connectedPeers = new Map();
@@ -92,6 +96,7 @@ export default defineConfig({
             scanDir(rootPublicDir, 'Laptop Library');
             scanDir(localPublicDir, 'Local Public');
             scanDir(mediaDir, 'Transferred Media');
+            scanDir(inboxDir, 'Inbox');
 
             // Prune stale peers (> 35s)
             const now = Date.now();
@@ -111,6 +116,103 @@ export default defineConfig({
               videos: publicVideos,
               peers: Array.from(connectedPeers.values())
             }));
+            return;
+          }
+
+          // 0.05 Files endpoint for P2P File Transfer downloads
+          if (req.url === '/api/files' && req.method === 'GET') {
+            const allFiles = [];
+            const seen = new Set();
+            const scanFiles = (dir, source) => {
+              if (fs.existsSync(dir)) {
+                try {
+                  const files = fs.readdirSync(dir);
+                  for (const f of files) {
+                    if (f.startsWith('.') || f.endsWith('.part')) continue;
+                    const p = path.join(dir, f);
+                    const stat = fs.statSync(p);
+                    if (stat.isFile() && !seen.has(f)) {
+                      seen.add(f);
+                      const ext = path.extname(f).toLowerCase();
+                      allFiles.push({
+                        filename: f,
+                        ext,
+                        sizeBytes: stat.size,
+                        sizeStr: stat.size < 1024 * 1024
+                          ? (stat.size / 1024).toFixed(1) + ' KB'
+                          : (stat.size / (1024 * 1024)).toFixed(1) + ' MB',
+                        mtime: stat.mtimeMs,
+                        downloadUrl: `/api/download/${encodeURIComponent(f)}`,
+                        streamUrl: ['.mp4', '.webm', '.mov', '.mp3', '.wav', '.ogg'].includes(ext)
+                          ? `/api/stream/${encodeURIComponent(f)}`
+                          : null,
+                        source,
+                      });
+                    }
+                  }
+                } catch (e) {}
+              }
+            };
+
+            scanFiles(inboxDir, 'Inbox');
+            scanFiles(mediaDir, 'Media Cache');
+            scanFiles(localPublicDir, 'Public');
+            scanFiles(rootPublicDir, 'Shared');
+            allFiles.sort((a, b) => b.mtime - a.mtime);
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, files: allFiles }));
+            return;
+          }
+
+          // 0.06 Direct File Download endpoint with attachment disposition
+          if (req.url.startsWith('/api/download/')) {
+            const rawFilename = decodeURIComponent(req.url.replace('/api/download/', ''));
+            const candidatePaths = [
+              path.join(inboxDir, rawFilename),
+              path.join(mediaDir, rawFilename),
+              path.join(localPublicDir, rawFilename),
+              path.join(rootPublicDir, rawFilename),
+            ];
+            const filePath = candidatePaths.find((p) => fs.existsSync(p));
+            if (!filePath) {
+              res.writeHead(404);
+              res.end('File Not Found');
+              return;
+            }
+
+            const stat = fs.statSync(filePath);
+            const ext = path.extname(rawFilename).toLowerCase();
+            const mimeMap = {
+              '.apk': 'application/vnd.android.package-archive',
+              '.pdf': 'application/pdf',
+              '.zip': 'application/zip',
+              '.rar': 'application/x-rar-compressed',
+              '.tar': 'application/x-tar',
+              '.gz': 'application/gzip',
+              '.7z': 'application/x-7z-compressed',
+              '.png': 'image/png',
+              '.jpg': 'image/jpeg',
+              '.jpeg': 'image/jpeg',
+              '.webp': 'image/webp',
+              '.gif': 'image/gif',
+              '.svg': 'image/svg+xml',
+              '.mp4': 'video/mp4',
+              '.webm': 'video/webm',
+              '.mp3': 'audio/mpeg',
+              '.wav': 'audio/wav',
+              '.txt': 'text/plain; charset=utf-8',
+              '.json': 'application/json',
+            };
+            const contentType = mimeMap[ext] || 'application/octet-stream';
+
+            res.writeHead(200, {
+              'Content-Disposition': `attachment; filename="${encodeURIComponent(rawFilename)}"`,
+              'Content-Type': contentType,
+              'Content-Length': stat.size,
+              'Access-Control-Allow-Origin': '*',
+            });
+            fs.createReadStream(filePath).pipe(res);
             return;
           }
 
@@ -214,6 +316,25 @@ export default defineConfig({
               let currentSize = 0;
               try { currentSize = fs.statSync(finalPath).size; } catch (e) {}
 
+              if (isLast) {
+                try {
+                  fs.copyFileSync(finalPath, path.join(inboxDir, filename));
+                } catch (e) {}
+
+                broadcastToAll({
+                  type: 'FILE_RECEIVED',
+                  payload: {
+                    filename,
+                    sizeBytes: currentSize,
+                    sizeStr: currentSize < 1024 * 1024
+                      ? (currentSize / 1024).toFixed(1) + ' KB'
+                      : (currentSize / (1024 * 1024)).toFixed(1) + ' MB',
+                    downloadUrl: `/api/download/${encodeURIComponent(filename)}`,
+                    timestamp: Date.now()
+                  }
+                });
+              }
+
               res.writeHead(200, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({
                 ok: true,
@@ -233,7 +354,7 @@ export default defineConfig({
 
           // 4. Direct Upload fallback
           if (req.url.startsWith('/api/upload') && req.method === 'POST') {
-            const rawFilename = req.headers['x-filename'] || `video-${Date.now()}.mp4`;
+            const rawFilename = req.headers['x-filename'] || `file-${Date.now()}`;
             const filename = decodeURIComponent(rawFilename).replace(/[^a-zA-Z0-9._-]/g, '_');
             const targetPath = path.join(mediaDir, filename);
             const writeStream = fs.createWriteStream(targetPath);
@@ -241,6 +362,23 @@ export default defineConfig({
             req.pipe(writeStream);
             writeStream.on('finish', () => {
               const fileStats = fs.statSync(targetPath);
+              try {
+                fs.copyFileSync(targetPath, path.join(inboxDir, filename));
+              } catch (e) {}
+
+              broadcastToAll({
+                type: 'FILE_RECEIVED',
+                payload: {
+                  filename,
+                  sizeBytes: fileStats.size,
+                  sizeStr: fileStats.size < 1024 * 1024
+                    ? (fileStats.size / 1024).toFixed(1) + ' KB'
+                    : (fileStats.size / (1024 * 1024)).toFixed(1) + ' MB',
+                  downloadUrl: `/api/download/${encodeURIComponent(filename)}`,
+                  timestamp: Date.now()
+                }
+              });
+
               res.writeHead(200, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({
                 ok: true,

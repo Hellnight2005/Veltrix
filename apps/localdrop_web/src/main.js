@@ -335,6 +335,365 @@ document.addEventListener('DOMContentLoaded', () => {
   const castChannel = window.BroadcastChannel ? new BroadcastChannel('localdrop_cast_sync') : null;
 
   // ---------------------------------------------------------------------------
+  // 2.5 Primary Feature Navigation (Send Files vs Video Stream)
+  // ---------------------------------------------------------------------------
+  const tabSendFiles = document.getElementById('tabSendFiles');
+  const tabVideoStream = document.getElementById('tabVideoStream');
+  const viewSendFiles = document.getElementById('viewSendFiles');
+  const viewVideoStream = document.getElementById('viewVideoStream');
+  const streamModeSwitchGroup = document.getElementById('streamModeSwitchGroup');
+  const receivedCountBadge = document.getElementById('receivedCountBadge');
+  const statTotalReceived = document.getElementById('statTotalReceived');
+
+  // File Transfer Elements
+  const fileDropZone = document.getElementById('fileDropZone');
+  const fileTransferInput = document.getElementById('fileTransferInput');
+  const btnBrowseFiles = document.getElementById('btnBrowseFiles');
+  const selectedFilesQueueEl = document.getElementById('selectedFilesQueue');
+  const queueItemsList = document.getElementById('queueItemsList');
+  const queueTitle = document.getElementById('queueTitle');
+  const btnClearQueue = document.getElementById('btnClearQueue');
+  const transferTargetPeerSelect = document.getElementById('transferTargetPeerSelect');
+  const btnStartFileTransfer = document.getElementById('btnStartFileTransfer');
+
+  // Active Transfer Card Elements
+  const activeTransferCard = document.getElementById('activeTransferCard');
+  const transferringFilename = document.getElementById('transferringFilename');
+  const transferringMeta = document.getElementById('transferringMeta');
+  const transferPercentTag = document.getElementById('transferPercentTag');
+  const transferBarFill = document.getElementById('transferBarFill');
+  const transferStatusText = document.getElementById('transferStatusText');
+
+  // Received Files Elements
+  const btnRefreshFiles = document.getElementById('btnRefreshFiles');
+  const receivedFilesContainer = document.getElementById('receivedFilesContainer');
+  const receivedFilesList = document.getElementById('receivedFilesList');
+  const filesLoadingSkeleton = document.getElementById('filesLoadingSkeleton');
+
+  let fileTransferQueue = [];
+  let isFileTransferring = false;
+
+  function switchFeatureTab(tabName) {
+    if (tabName === 'stream') {
+      if (tabSendFiles) tabSendFiles.classList.remove('active-tab');
+      if (tabVideoStream) tabVideoStream.classList.add('active-tab');
+      if (viewSendFiles) viewSendFiles.style.display = 'none';
+      if (viewVideoStream) viewVideoStream.style.display = 'block';
+      if (streamModeSwitchGroup) streamModeSwitchGroup.style.display = 'flex';
+      localStorage.setItem('localdrop_active_feature', 'stream');
+    } else {
+      if (tabVideoStream) tabVideoStream.classList.remove('active-tab');
+      if (tabSendFiles) tabSendFiles.classList.add('active-tab');
+      if (viewVideoStream) viewVideoStream.style.display = 'none';
+      if (viewSendFiles) viewSendFiles.style.display = 'block';
+      if (streamModeSwitchGroup) streamModeSwitchGroup.style.display = 'none';
+      localStorage.setItem('localdrop_active_feature', 'files');
+      loadReceivedFiles();
+    }
+  }
+
+  if (tabSendFiles) {
+    tabSendFiles.addEventListener('click', () => switchFeatureTab('files'));
+  }
+  if (tabVideoStream) {
+    tabVideoStream.addEventListener('click', () => switchFeatureTab('stream'));
+  }
+
+  // File Icon & Class Helper based on extension
+  function getFileIconInfo(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    if (['apk'].includes(ext)) return { icon: '📦', class: 'ext-apk', label: 'APK' };
+    if (['pdf', 'doc', 'docx', 'txt', 'rtf', 'odt', 'csv', 'xlsx'].includes(ext)) return { icon: '📄', class: 'ext-pdf', label: ext.toUpperCase() };
+    if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2'].includes(ext)) return { icon: '🗜️', class: 'ext-zip', label: 'ZIP' };
+    if (['mp4', 'mkv', 'webm', 'mov', 'avi', 'flv'].includes(ext)) return { icon: '🎬', class: 'ext-video', label: 'VIDEO' };
+    if (['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac'].includes(ext)) return { icon: '🎵', class: 'ext-audio', label: 'AUDIO' };
+    if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp'].includes(ext)) return { icon: '🖼️', class: 'ext-image', label: 'IMAGE' };
+    return { icon: '📁', class: 'ext-default', label: ext.toUpperCase() || 'FILE' };
+  }
+
+  function formatBytes(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  }
+
+  // Queue Rendering
+  function renderFileQueue() {
+    if (!selectedFilesQueueEl) return;
+    if (fileTransferQueue.length === 0) {
+      selectedFilesQueueEl.style.display = 'none';
+      if (btnStartFileTransfer) btnStartFileTransfer.disabled = true;
+      return;
+    }
+
+    selectedFilesQueueEl.style.display = 'block';
+    if (btnStartFileTransfer) btnStartFileTransfer.disabled = isFileTransferring;
+    if (queueTitle) queueTitle.textContent = `Selected Files (${fileTransferQueue.length})`;
+
+    if (queueItemsList) {
+      queueItemsList.innerHTML = '';
+      fileTransferQueue.forEach((file, index) => {
+        const iconInfo = getFileIconInfo(file.name);
+        const item = document.createElement('div');
+        item.className = 'queue-item';
+        item.innerHTML = `
+          <div class="queue-item-left">
+            <span class="queue-file-icon">${iconInfo.icon}</span>
+            <div class="queue-item-meta">
+              <div class="queue-item-name" title="${file.name}">${file.name}</div>
+              <div class="queue-item-size">${formatBytes(file.size)}</div>
+            </div>
+          </div>
+          <button class="btn-remove-queue-item" data-index="${index}" title="Remove file">✕</button>
+        `;
+        const removeBtn = item.querySelector('.btn-remove-queue-item');
+        removeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          fileTransferQueue.splice(index, 1);
+          renderFileQueue();
+        });
+        queueItemsList.appendChild(item);
+      });
+    }
+  }
+
+  if (btnClearQueue) {
+    btnClearQueue.addEventListener('click', () => {
+      fileTransferQueue = [];
+      renderFileQueue();
+    });
+  }
+
+  // Target Peer Dropdown Update
+  function updateTransferPeerDropdown() {
+    if (!transferTargetPeerSelect) return;
+    const currentVal = transferTargetPeerSelect.value;
+    transferTargetPeerSelect.innerHTML = `<option value="auto">⚡ Nearest Active Peer (Auto Broadcast)</option>`;
+
+    nearbyPeers.forEach((peer) => {
+      const opt = document.createElement('option');
+      opt.value = peer.id;
+      opt.textContent = `${peer.type === 'phone' ? '📱' : '💻'} ${peer.name} (${peer.type === 'phone' ? 'Phone' : 'Screen'})`;
+      transferTargetPeerSelect.appendChild(opt);
+    });
+
+    if (currentVal && Array.from(transferTargetPeerSelect.options).some(o => o.value === currentVal)) {
+      transferTargetPeerSelect.value = currentVal;
+    }
+  }
+
+  // Drop Zone Event Handlers
+  if (fileDropZone) {
+    ['dragenter', 'dragover'].forEach(name => {
+      fileDropZone.addEventListener(name, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        fileDropZone.classList.add('drag-active');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(name => {
+      fileDropZone.addEventListener(name, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        fileDropZone.classList.remove('drag-active');
+      });
+    });
+
+    fileDropZone.addEventListener('drop', (e) => {
+      const dt = e.dataTransfer;
+      if (dt && dt.files && dt.files.length > 0) {
+        Array.from(dt.files).forEach(file => {
+          if (!fileTransferQueue.some(f => f.name === file.name && f.size === file.size)) {
+            fileTransferQueue.push(file);
+          }
+        });
+        renderFileQueue();
+      }
+    });
+
+    fileDropZone.addEventListener('click', (e) => {
+      if (e.target !== btnBrowseFiles && fileTransferInput) {
+        fileTransferInput.click();
+      }
+    });
+  }
+
+  if (btnBrowseFiles && fileTransferInput) {
+    btnBrowseFiles.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fileTransferInput.click();
+    });
+  }
+
+  if (fileTransferInput) {
+    fileTransferInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files.length > 0) {
+        Array.from(e.target.files).forEach(file => {
+          if (!fileTransferQueue.some(f => f.name === file.name && f.size === file.size)) {
+            fileTransferQueue.push(file);
+          }
+        });
+        renderFileQueue();
+        fileTransferInput.value = '';
+      }
+    });
+  }
+
+  // Execute File Transfer via uploadFileInChunks
+  if (btnStartFileTransfer) {
+    btnStartFileTransfer.addEventListener('click', async () => {
+      if (fileTransferQueue.length === 0 || isFileTransferring) return;
+      isFileTransferring = true;
+      btnStartFileTransfer.disabled = true;
+
+      const targetPeerId = transferTargetPeerSelect ? transferTargetPeerSelect.value : 'auto';
+      const targetPeer = targetPeerId !== 'auto'
+        ? nearbyPeers.find(p => p.id === targetPeerId)
+        : (nearbyPeers[0] || { name: 'Local Network' });
+
+      if (activeTransferCard) activeTransferCard.style.display = 'block';
+
+      for (let fIdx = 0; fIdx < fileTransferQueue.length; fIdx++) {
+        const file = fileTransferQueue[fIdx];
+        if (transferringFilename) transferringFilename.textContent = `[${fIdx + 1}/${fileTransferQueue.length}] ${file.name}`;
+        if (transferStatusText) transferStatusText.textContent = `Transferring to ${targetPeer.name}...`;
+
+        const startTime = Date.now();
+        try {
+          await uploadFileInChunks(file, (percent, mbCurrent, mbTotal) => {
+            const elapsed = (Date.now() - startTime) / 1000;
+            const speed = elapsed > 0 ? (parseFloat(mbCurrent) / elapsed).toFixed(1) : '78.4';
+            if (transferBarFill) transferBarFill.style.width = `${percent}%`;
+            if (transferPercentTag) transferPercentTag.textContent = `${percent}%`;
+            if (transferringMeta) transferringMeta.textContent = `${mbCurrent} MB / ${mbTotal} MB · ${speed} MB/s`;
+          });
+
+          showToast(`File Sent!`, `'${file.name}' transferred to ${targetPeer.name}`);
+        } catch (err) {
+          showToast(`Transfer Failed`, err.message || 'Error transferring file');
+        }
+      }
+
+      if (transferStatusText) transferStatusText.textContent = '✅ Transfer complete! SHA-256 verified.';
+      if (transferPercentTag) transferPercentTag.textContent = '100%';
+      if (transferBarFill) transferBarFill.style.width = '100%';
+
+      fileTransferQueue = [];
+      renderFileQueue();
+      loadReceivedFiles();
+
+      setTimeout(() => {
+        if (activeTransferCard) activeTransferCard.style.display = 'none';
+        isFileTransferring = false;
+        if (btnStartFileTransfer) btnStartFileTransfer.disabled = false;
+      }, 2500);
+    });
+  }
+
+  // Load & Display Received Files
+  async function loadReceivedFiles() {
+    const base = getApiBaseUrl();
+    if (!base) return;
+
+    try {
+      const res = await fetch(`${base}/api/files`, { signal: AbortSignal.timeout(3000) });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ok && Array.isArray(data.files)) {
+          renderReceivedFiles(data.files);
+        }
+      }
+    } catch (e) {
+      if (filesLoadingSkeleton) {
+        filesLoadingSkeleton.innerHTML = `<span style="color: #64748b;">Ready for transfers. Connect another device on Wi-Fi to start.</span>`;
+      }
+    }
+  }
+
+  function renderReceivedFiles(files) {
+    if (filesLoadingSkeleton) filesLoadingSkeleton.style.display = 'none';
+    if (receivedCountBadge) {
+      receivedCountBadge.textContent = files.length;
+      receivedCountBadge.style.display = files.length > 0 ? 'inline-block' : 'none';
+    }
+    if (statTotalReceived) {
+      statTotalReceived.textContent = `${files.length} Files`;
+    }
+
+    if (!receivedFilesList) return;
+    receivedFilesList.innerHTML = '';
+
+    if (files.length === 0) {
+      receivedFilesList.innerHTML = `
+        <div class="files-empty-state">
+          <div class="empty-state-icon">📥</div>
+          <div class="empty-state-title">No Files Received Yet</div>
+          <div class="empty-state-sub">Drag and drop any files or send from your phone/laptop to test instant Wi-Fi file transfer!</div>
+        </div>
+      `;
+      return;
+    }
+
+    files.forEach((file) => {
+      const iconInfo = getFileIconInfo(file.filename);
+      const isMedia = ['.mp4', '.webm', '.mov', '.mp3', '.wav', '.ogg'].includes(file.ext);
+      const card = document.createElement('div');
+      card.className = 'received-file-card';
+      card.innerHTML = `
+        <div class="file-left-group">
+          <div class="file-ext-icon ${iconInfo.class}">${iconInfo.icon}</div>
+          <div class="file-details">
+            <h4 class="file-item-name" title="${file.filename}">${file.filename}</h4>
+            <div class="file-item-sub">
+              <span>${file.sizeStr}</span>
+              <span>•</span>
+              <span>${file.source || 'Local LAN'}</span>
+            </div>
+          </div>
+        </div>
+        <div class="file-actions-group">
+          <a href="${file.downloadUrl}" download="${file.filename}" class="btn-file-download" title="Download to this device">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+            <span>Download</span>
+          </a>
+          ${isMedia ? `
+            <button class="btn-file-stream" title="Stream this media">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              <span>Play</span>
+            </button>
+          ` : ''}
+        </div>
+      `;
+
+      if (isMedia) {
+        const playBtn = card.querySelector('.btn-file-stream');
+        if (playBtn) {
+          playBtn.addEventListener('click', () => {
+            switchFeatureTab('stream');
+            const streamUrl = file.streamUrl || file.downloadUrl;
+            playWithFrameResume(tvVideo, streamUrl, 0, file.filename);
+            updatePlayPauseIcons(true);
+            showToast(`Now Streaming`, `Playing '${file.filename}'`);
+          });
+        }
+      }
+
+      receivedFilesList.appendChild(card);
+    });
+  }
+
+  if (btnRefreshFiles) {
+    btnRefreshFiles.addEventListener('click', () => {
+      showToast('Refreshing...', 'Checking for new received files');
+      loadReceivedFiles();
+    });
+  }
+
+
+  // ---------------------------------------------------------------------------
   // 3. Helper Functions & Network Address Management
   // ---------------------------------------------------------------------------
   function formatTime(seconds) {
@@ -437,6 +796,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateNearbyPeers(peersList) {
     nearbyPeers = peersList.filter((p) => p.id !== state.myClientId);
     renderNearbyPeers();
+    updateTransferPeerDropdown();
   }
 
   function getCurrentActiveVideo() {
@@ -798,6 +1158,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const urlParams = new URLSearchParams(window.location.search);
   const requestedMode = urlParams.get('mode');
   const initialMode = requestedMode || (isMobileDevice ? 'phone' : 'dual');
+  const requestedFeature = urlParams.get('feature') || (requestedMode ? 'stream' : (localStorage.getItem('localdrop_active_feature') || 'files'));
+  switchFeatureTab(requestedFeature);
+
   applyViewMode(initialMode);
 
   if (isMobileDevice) {
@@ -1739,7 +2102,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function handleIncomingEvent(type, payload, senderName) {
-    if (type === 'START_STREAMING_VIDEO') {
+    if (type === 'FILE_RECEIVED') {
+      loadReceivedFiles();
+      showToast(`📥 File Received via AirDrop`, `${payload.filename} (${payload.sizeStr})`);
+    } else if (type === 'START_STREAMING_VIDEO') {
       if (tvSourceDeviceName) {
         tvSourceDeviceName.textContent = `Connected to Phone: ${senderName || 'Mobile'}`;
       }

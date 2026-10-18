@@ -20,30 +20,43 @@
     <div class="banner-content">
       <div class="brand-pill">
         <span class="pulse-dot"></span>
-        <span class="brand-name">LocalDrop Cast</span>
-        <span class="proto-tag">P2P LAN Server</span>
+        <span class="brand-name">LocalDrop</span>
+        <span class="proto-tag">P2P LAN</span>
       </div>
 
-      <!-- Mode Selector Tabs: Phone, TV, Dual -->
-      <div class="mode-switch-group">
+      <!-- PRIMARY FEATURE SWITCHER: SEND FILES VS VIDEO STREAM -->
+      <div class="primary-feature-switch" id="primaryFeatureSwitch">
+        <button id="tabSendFiles" class="primary-tab-btn active-tab" title="P2P AirDrop File Transfer (Any File)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+          <span>📁 Send Files</span>
+          <span class="feature-count-badge" id="receivedCountBadge" style="display: none;">0</span>
+        </button>
+        <button id="tabVideoStream" class="primary-tab-btn" title="AirDrop Cinema & Media Stream">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect width="14" height="14" x="1" y="5" rx="2" ry="2"/></svg>
+          <span>🎬 Video Stream</span>
+        </button>
+      </div>
+
+      <!-- Mode Selector Tabs: Phone, TV, Dual (for Video Stream) -->
+      <div class="mode-switch-group" id="streamModeSwitchGroup">
         <button id="btnModePhone" class="mode-btn active-mode" title="View Phone Server & Remote Controller">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="20" x="5" y="2" rx="3"/><path d="M12 18h.01"/></svg>
-          <span>📱 Phone (Server)</span>
+          <span>📱 Phone</span>
         </button>
         <button id="btnModeTV" class="mode-btn" title="View TV Screen Receiver">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="15" x="2" y="3" rx="2"/><path d="M12 18v4"/><path d="M8 22h8"/></svg>
-          <span>📺 TV (Client)</span>
+          <span>📺 TV Screen</span>
         </button>
         <button id="btnModeDual" class="mode-btn" title="Side-by-side simulation of Phone streaming to TV">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="8" height="16" x="2" y="4" rx="2"/><rect width="10" height="12" x="12" y="6" rx="2"/><path d="M10 12h2"/></svg>
-          <span>⚡ Dual View (Phone + TV)</span>
+          <span>⚡ Dual View</span>
         </button>
       </div>
 
       <div class="view-controls">
         <a id="btnDownloadApk" href="/LocalDrop-v1.0-debug.apk" download="LocalDrop-v1.0-debug.apk" class="btn-ghost-sm" title="Download Android APK" style="text-decoration: none; color: #10b981; border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.08);">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-          <span>📦 Download APK (v1.0)</span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+          <span>📦 APK</span>
         </a>
         <button id="btnToggleMobileFrame" class="btn-ghost-sm" title="Toggle Phone Shell Container">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="20" x="5" y="2" rx="3"/><path d="M12 18h.01"/></svg>
@@ -97,6 +110,152 @@
     </div>
   </section>
 
+  <!-- ========================================================================= -->
+  <!-- FEATURE 1: P2P AIRDROP FILE TRANSFER WORKSPACE                            -->
+  <!-- ========================================================================= -->
+  <section class="feature-workspace" id="viewSendFiles">
+    <div class="file-transfer-container">
+      
+      <!-- Top Action Bar for Files -->
+      <div class="files-header-bar">
+        <div class="files-header-titles">
+          <div class="files-title-row">
+            <span class="files-header-icon">📁</span>
+            <h2 class="files-main-title">AirDrop LAN File Transfer</h2>
+            <span class="badge-lan-ready">● Direct Wi-Fi P2P</span>
+          </div>
+          <p class="files-main-sub">Send any file (Documents, APKs, Photos, Videos, Zip archives) directly to nearby devices at 70+ MB/s without cloud servers or size limits</p>
+        </div>
+        <div class="files-quick-stats">
+          <div class="stat-pill">
+            <span class="stat-num" id="statLanSpeed">78.4 MB/s</span>
+            <span class="stat-lbl">LAN Speed</span>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-num">SHA-256</span>
+            <span class="stat-lbl">Checksum</span>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-num" id="statTotalReceived">0 Files</span>
+            <span class="stat-lbl">Received</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Dual Column Grid for File Transfer -->
+      <div class="files-grid-layout">
+        
+        <!-- LEFT COLUMN: Send Files Drop Zone & Controls -->
+        <div class="files-card file-sender-card">
+          <div class="card-title-row">
+            <div class="card-title-group">
+              <span class="card-icon-bubble send-bubble">📤</span>
+              <div>
+                <h3 class="card-heading">Send Files to Nearby Device</h3>
+                <p class="card-sub">Choose any file from your device to send</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Drop Zone -->
+          <div class="file-drop-zone" id="fileDropZone">
+            <input type="file" id="fileTransferInput" multiple style="display: none;">
+            <div class="drop-zone-content">
+              <div class="drop-icon-anim">
+                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+              </div>
+              <h4 class="drop-primary-text">Drag & drop any files here</h4>
+              <p class="drop-secondary-text">or <button type="button" class="btn-browse-files" id="btnBrowseFiles">Browse Files</button></p>
+              <div class="supported-types-pill">
+                <span>📄 PDF/Docs</span>
+                <span>📦 APKs & ZIPs</span>
+                <span>🖼️ Photos</span>
+                <span>🎬 Videos</span>
+                <span>🎵 Audio</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Selected Files Queue -->
+          <div class="selected-files-queue" id="selectedFilesQueue" style="display: none;">
+            <div class="queue-header">
+              <span class="queue-title" id="queueTitle">Selected Files (0)</span>
+              <button class="btn-clear-queue" id="btnClearQueue">Clear All</button>
+            </div>
+            <div class="queue-items-list" id="queueItemsList"></div>
+          </div>
+
+          <!-- Target Peer Selection & Send Button -->
+          <div class="send-action-row">
+            <div class="target-device-picker-wrap">
+              <label class="input-label" for="transferTargetPeerSelect">Send to Device:</label>
+              <select class="device-select-dropdown" id="transferTargetPeerSelect">
+                <option value="auto">⚡ Nearest Active Peer (Auto Broadcast)</option>
+              </select>
+            </div>
+            <button class="btn-primary-send" id="btnStartFileTransfer" disabled>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              <span>Send via LAN</span>
+            </button>
+          </div>
+
+          <!-- Active Transfer Progress Card (Dynamic during transfer) -->
+          <div class="active-transfer-card" id="activeTransferCard" style="display: none;">
+            <div class="transfer-card-top">
+              <div class="transfer-file-info">
+                <span class="pulse-uploading"></span>
+                <div>
+                  <h4 class="transferring-filename" id="transferringFilename">Document.pdf</h4>
+                  <span class="transferring-meta" id="transferringMeta">0 MB / 0 MB · 0 MB/s</span>
+                </div>
+              </div>
+              <span class="transfer-percent-tag" id="transferPercentTag">0%</span>
+            </div>
+            <div class="transfer-bar-track">
+              <div class="transfer-bar-fill" id="transferBarFill" style="width: 0%;"></div>
+            </div>
+            <div class="transfer-card-footer">
+              <span class="hash-tag">🛡️ SHA-256 Engine Streaming</span>
+              <span class="transfer-status-text" id="transferStatusText">Transferring chunks...</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- RIGHT COLUMN: Received Files & Download Center -->
+        <div class="files-card file-receiver-card">
+          <div class="card-title-row">
+            <div class="card-title-group">
+              <span class="card-icon-bubble receive-bubble">📥</span>
+              <div>
+                <h3 class="card-heading">Received Files & Download Center</h3>
+                <p class="card-sub">Files transferred to this device over Wi-Fi</p>
+              </div>
+            </div>
+            <button class="btn-refresh-files" id="btnRefreshFiles" title="Refresh Files">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+              <span>Refresh</span>
+            </button>
+          </div>
+
+          <!-- Received Files List -->
+          <div class="received-files-container" id="receivedFilesContainer">
+            <div class="files-loading-skeleton" id="filesLoadingSkeleton">
+              <span class="pulse-loader"></span>
+              <span>Loading received files from LocalDrop engine...</span>
+            </div>
+            <div class="received-files-list" id="receivedFilesList"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================= -->
+  <!-- FEATURE 2: VIDEO STREAM & CINEMA WORKSPACE                                -->
+  <!-- ========================================================================= -->
+  <section class="feature-workspace" id="viewVideoStream" style="display: none;">
   <!-- ========================================================================= -->
   <!-- AIRDROP MOVIE STREAM SERVER (Instant 0-Wait Streaming to Any Device)      -->
   <!-- ========================================================================= -->
@@ -581,6 +740,7 @@
     </section>
 
   </main>
+  </section>
 
   <!-- ========================================================================= -->
   <!-- MODAL: Device Target Selector (Prompted on Open or Switch)                -->
