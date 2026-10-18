@@ -153,15 +153,17 @@ document.addEventListener('DOMContentLoaded', () => {
     videoEl.poster = '';
     if (tvStandbyScreen) tvStandbyScreen.style.display = 'none';
 
-    // Dynamically match subtitle tracks with active episode
-    let epNum = '11';
-    if (title.includes('12')) epNum = '12';
-    else if (title.includes('13')) epNum = '13';
-
-    const trackEng = videoEl.querySelector('track[label="English Subtitles"]');
-    const trackSigns = videoEl.querySelector('track[label="Signs & Songs"]');
-    if (trackEng) trackEng.src = `/api/stream/Episode_${epNum}_Subtitles_Eng.vtt`;
-    if (trackSigns) trackSigns.src = `/api/stream/Episode_${epNum}_Subtitles_Signs.vtt`;
+    // Auto-detect matching subtitle file with same basename if available
+    const baseName = title ? title.replace(/\.[^/.]+$/, "") : "";
+    if (baseName && !videoEl.querySelector('track')) {
+      const autoTrack = document.createElement('track');
+      autoTrack.kind = 'subtitles';
+      autoTrack.label = 'Default Subtitles';
+      autoTrack.srclang = 'en';
+      autoTrack.src = `/api/stream/${encodeURIComponent(baseName)}.vtt`;
+      autoTrack.default = true;
+      videoEl.appendChild(autoTrack);
+    }
 
     if (videoEl.src === targetUrl || (videoEl.currentSrc && videoEl.currentSrc === targetUrl)) {
       applySeek();

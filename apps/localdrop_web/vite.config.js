@@ -260,14 +260,11 @@ export default defineConfig({
           if (req.url.startsWith('/api/stream/')) {
             let rawFilename = decodeURIComponent(req.url.replace('/api/stream/', ''));
 
-            // Auto-fallback: if MKV is requested, automatically route to the web-ready H.264 MP4 version!
+            // Generic auto-fallback: if MKV is requested, check if a matching web MP4 exists
             if (rawFilename.toLowerCase().endsWith('.mkv')) {
-              if (rawFilename.includes('12') && fs.existsSync(path.join(rootPublicDir, 'Episode_12_Ready_To_Stream.mp4'))) {
-                rawFilename = 'Episode_12_Ready_To_Stream.mp4';
-              } else if (rawFilename.includes('13') && fs.existsSync(path.join(rootPublicDir, 'Episode_13_Ready_To_Stream.mp4'))) {
-                rawFilename = 'Episode_13_Ready_To_Stream.mp4';
-              } else if (fs.existsSync(path.join(rootPublicDir, 'Episode_11_Ready_To_Stream.mp4'))) {
-                rawFilename = 'Episode_11_Ready_To_Stream.mp4';
+              const mp4Name = rawFilename.replace(/\.mkv$/i, '.mp4');
+              if (fs.existsSync(path.join(rootPublicDir, mp4Name)) || fs.existsSync(path.join(mediaDir, mp4Name))) {
+                rawFilename = mp4Name;
               }
             }
 
