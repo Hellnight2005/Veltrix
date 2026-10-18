@@ -971,18 +971,18 @@ cargo run --release -p localdrop_cli -- send 192.168.0.105:8080 ./path/to/movie.
     <div class="devpost-grid">
       <div class="devpost-card">
         <div>
-          <h3>💡 The Inspiration</h3>
+          <h3>💡 The Inspiration & The Anime Dilemma</h3>
           <p>
-            AirDrop is locked to Apple hardware. Android Nearby Share is fragmented. Cloud relays require uploading private files to third-party servers, choking on large 4K movies. We wanted an open-source, universal LAN drop and cinema stream that works across every phone, TV, laptop, and tablet instantly.
+            LocalDrop started with a technical blueprint: a Rust-powered P2P file transfer engine with Tokio and streaming SHA-256 to escape cloud relays. But while building it, I ran into a personal frustration: <strong>I am a huge anime fan</strong>. I download episodes onto my phone, but watching on a tiny screen when a big TV is right there felt limiting. Searching for cables, enabling MTP, and waiting 15 minutes to copy a 3 GB anime episode killed the vibe. Then the breakthrough hit: <em>Why wait for the whole file to transfer before pressing play? What if we stream video slices over the LAN so it plays immediately on the big screen, with exact frame memory?</em>
           </p>
         </div>
       </div>
 
       <div class="devpost-card">
         <div>
-          <h3>⚡ What It Does</h3>
+          <h3>⚡ The Dual-Engine Breakthrough</h3>
           <p>
-            LocalDrop combines <strong>P2P AirDrop LAN file transfers</strong> (78.4+ MB/s, multi-file queue, SHA-256 verification) with <strong>AirDrop Cinema</strong> (HTTP 206 chunked range streaming, &lt;200ms TTFP, and frame-accurate device handoff between phone and TV).
+            That epiphany transformed the project into a dual-engine architecture: <strong>📁 P2P AirDrop File Transfer</strong> (78.4+ MB/s, multi-file queue, SHA-256 verification) + <strong>🎬 AirDrop Cinema</strong> (HTTP 206 chunked range streaming, &lt;200ms TTFP, and frame-accurate device handoff between phone and TV).
           </p>
         </div>
       </div>
@@ -991,34 +991,34 @@ cargo run --release -p localdrop_cli -- send 192.168.0.105:8080 ./path/to/movie.
         <div>
           <h3>🛠️ How We Built It</h3>
           <p>
-            The backend engine is written in <strong>Rust</strong> with Tokio asynchronous networking and Postcard binary framing. The presentation layer is a responsive <strong>Web PWA</strong> with pure CSS/JS, Server-Sent Events (SSE), and a standalone <strong>Android APK</strong> container.
+            The backend engine is engineered in <strong>Rust</strong> with Tokio asynchronous networking and Postcard binary framing. The presentation layer is a responsive <strong>Web PWA</strong> with pure CSS/JS, Server-Sent Events (SSE), and a standalone <strong>Android APK</strong> container.
           </p>
         </div>
       </div>
 
       <div class="devpost-card">
         <div>
-          <h3>🧗 Challenges Overcome</h3>
+          <h3>🧗 Real Technical Hurdles Solved</h3>
           <p>
-            We resolved the delayed audio echo bug using strict single-audio state routing; conquered iOS Safari autoplay and audio ducking policies with <code>webkit-playsinline</code> and gesture unlocking; and bounded RAM usage to $O(\text{chunk})$ with zero heap bloat.
+            We resolved the delayed audio echo bug using strict single-audio routing (the phone automatically mutes to act as a silent remote while the TV takes active audio); conquered iOS Safari WebKit autoplay policies with <code>webkit-playsinline</code> and gesture unlocking; and bounded RAM to $O(\text{chunk})$ with zero heap bloat.
           </p>
         </div>
       </div>
 
       <div class="devpost-card">
         <div>
-          <h3>🌟 Key Accomplishments</h3>
+          <h3>🌟 Accomplishments We're Proud Of</h3>
           <p>
-            Delivering 78.4 MB/s LAN throughput, frame-accurate resume memory, standalone APK v1.0, and 100% peer-to-peer privacy with zero external servers or cloud accounts.
+            Delivering 78.4 MB/s LAN throughput, sub-200ms frame-accurate resume memory, standalone APK v1.0, and 100% peer-to-peer privacy with zero external servers, cloud accounts, or 24/7 battery drain.
           </p>
         </div>
       </div>
 
       <div class="devpost-card">
         <div>
-          <h3>🔮 What's Next</h3>
+          <h3>🔮 Future Horizons</h3>
           <p>
-            QUIC/WebTransport peer streaming, hardware-accelerated transcoding for legacy TV chipsets, and automatic Wi-Fi Direct peer grouping when no shared router is present.
+            QUIC transport integration, multi-peer synchronized anime watch parties on the local network, and automatic Wi-Fi Direct peer grouping when no shared router is present.
           </p>
         </div>
       </div>
