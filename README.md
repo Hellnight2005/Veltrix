@@ -6,6 +6,7 @@
 [![Rust](https://img.shields.io/badge/Rust-1.80%2B-orange.svg)](https://www.rust-lang.org/)
 [![Android APK](https://img.shields.io/badge/Release-APK%20v1.0-brightgreen.svg)](releases/LocalDrop-v1.0-debug.apk)
 [![Devpost Submission](https://img.shields.io/badge/Devpost-Hackathon%20Submission-003E54.svg)](DEVPOST.md)
+[![Pitch Playbook](https://img.shields.io/badge/Pitch%20Playbook-HACKATHON__GUIDE-7928CA.svg)](docs/HACKATHON_GUIDE.md)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 > **LocalDrop (Veltrix)** is a privacy-first, cross-platform peer-to-peer (P2P) local file transfer and media streaming system. It combines a high-throughput **Rust core engine** with an intuitive **Mobile & Web Cinema Cast App** featuring **zero-wait chunked video streaming**, **sub-200ms frame-accurate handoff**, and **AirDrop-style LAN file transfers** across phones, laptops, and smart TVs on a local area network (LAN).
@@ -186,6 +187,7 @@ Veltrix/
 │   └── localdrop_cli/        # High-performance CLI transfer tool
 ├── protocol/                 # Formal protocol specifications (framing, handshake, etc.)
 ├── docs/                     # Architectural specifications, guides, and screenshots
+│   ├── HACKATHON_GUIDE.md    # Hackathon pitch playbook, demo script, and judge defense matrix
 │   ├── index.html            # Standalone GitHub Pages interactive showcase site
 │   ├── ARCHITECTURE.md       # Technical architecture, audio routing, protocol & memory specs
 │   ├── DEPLOYMENT_GUIDE.md   # Deployment, GitHub Pages setup, and cross-platform run guide
