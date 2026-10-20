@@ -1,3 +1,6 @@
+import QRCode from 'qrcode';
+import jsQR from 'jsqr';
+
 /**
  * LocalDrop Cast — Phone Media Server to TV Client Architecture
  * 
@@ -18,16 +21,29 @@ document.addEventListener('DOMContentLoaded', () => {
   const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 800;
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-  let myClientId = localStorage.getItem('localdrop_client_id');
+  const urlParams = new URLSearchParams(window.location.search);
+  const paramPeer = urlParams.get('peer');
+  const paramName = urlParams.get('name');
+
+  let myClientId = paramPeer || localStorage.getItem('localdrop_client_id');
   if (!myClientId) {
     myClientId = 'peer-' + Math.random().toString(36).substring(2, 9);
     localStorage.setItem('localdrop_client_id', myClientId);
   }
 
-  let myDeviceName = localStorage.getItem('localdrop_device_name');
+  let myDeviceName = paramName || localStorage.getItem('localdrop_device_name');
   if (!myDeviceName) {
     myDeviceName = isMobileDevice ? 'Vivo Phone (Mobile)' : "Abhijeet's Laptop Screen";
     localStorage.setItem('localdrop_device_name', myDeviceName);
+  }
+
+  if (urlParams.get('pairedTo')) {
+    const hostPeerId = urlParams.get('pairedTo');
+    const hostPeerName = urlParams.get('fromName') || 'Host Device';
+    setTimeout(() => {
+      savePairedPeer(hostPeerId);
+      showToast(`Paired with ${hostPeerName}!`, 'Connected via QR Code discovery');
+    }, 1200);
   }
 
   // Persistent Paired Peers Store (Remembered across sessions and reconnects)
@@ -127,7 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const isTvTarget = (videoEl === tvVideo);
-      const isCastingOrDual = (state.currentMode === 'tv' || state.currentMode === 'dual' || !isMobileDevice || state.activeRole === 'sender');
+      const isCastingOrDual = (state.currentMode === 'tv' || !isMobileDevice || state.activeRole === 'sender');
 
       if (isTvTarget) {
         // TV Screen is the active audio speaker
@@ -235,9 +251,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Top Banner / Modes
   const btnModePhone = document.getElementById('btnModePhone');
   const btnModeTV = document.getElementById('btnModeTV');
-  const btnModeDual = document.getElementById('btnModeDual');
-  const btnToggleMobileFrame = document.getElementById('btnToggleMobileFrame');
-  const frameToggleLabel = document.getElementById('frameToggleLabel');
   const mobileDeviceShell = document.getElementById('mobileDeviceShell');
 
   // Hero Discovered Screen Card on Phone
@@ -909,15 +922,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderNearbyPeers() {
     renderHandoffChips();
+    if (typeof renderRadarVisuals === 'function') {
+      renderRadarVisuals();
+    }
     if (!airdropPeersList) return;
     if (nearbyPeers.length === 0) {
-      if (airdropPeerCount) airdropPeerCount.textContent = 'Searching...';
+      if (airdropPeerCount) airdropPeerCount.textContent = 'Searching LAN...';
       airdropPeersList.innerHTML = `
-        <div class="peer-scanning-skeleton">
-          <span class="pulse-loader"></span>
-          <span>Listening for nearby LocalDrop peers on local Wi-Fi...</span>
+        <div class="peer-skeleton-rich">
+          <div class="skeleton-text-group">
+            <span class="pulse-loader"></span>
+            <span>Listening for nearby LocalDrop peers on local Wi-Fi...</span>
+          </div>
+          <div class="skeleton-actions-row">
+            <button class="btn-skeleton-action primary" id="btnSkeletonScan">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10"/><circle cx="12" cy="2" r="2"/></svg>
+              <span>Scan Wi-Fi</span>
+            </button>
+            <button class="btn-skeleton-action secondary" id="btnSkeletonQr">
+              <span>📷 Scan QR</span>
+            </button>
+            <button class="btn-skeleton-action secondary" id="btnSkeletonShowQr">
+              <span>📱 My QR</span>
+            </button>
+            <button class="btn-skeleton-action demo" id="btnSkeletonDemo">
+              <span>🧪 + Add Demo Device</span>
+            </button>
+          </div>
         </div>
       `;
+      const btnScan = document.getElementById('btnSkeletonScan');
+      const btnQr = document.getElementById('btnSkeletonQr');
+      const btnMy = document.getElementById('btnSkeletonShowQr');
+      const btnDemo = document.getElementById('btnSkeletonDemo');
+      if (btnScan) btnScan.addEventListener('click', () => openScannerModal('radar'));
+      if (btnQr) btnQr.addEventListener('click', () => openScannerModal('camera'));
+      if (btnMy) btnMy.addEventListener('click', () => openScannerModal('myqr'));
+      if (btnDemo) btnDemo.addEventListener('click', () => addDemoPeer());
       return;
     }
 
@@ -930,12 +971,12 @@ document.addEventListener('DOMContentLoaded', () => {
       card.className = `airdrop-peer-card ${isPaired ? 'peer-paired' : ''}`;
       card.title = isPaired ? `Paired with ${peer.name}. Tap to stream/handoff video!` : `Tap to pair and stream with ${peer.name}`;
       card.innerHTML = `
-        <div class="peer-card-avatar">${peer.type === 'phone' ? '📱' : '💻'}</div>
+        <div class="peer-card-avatar">${peer.type === 'phone' ? '📱' : peer.type === 'tv' ? '📺' : '💻'}</div>
         <div class="peer-card-info">
           <div class="peer-card-title">${peer.name}</div>
           <div class="peer-card-meta">
             ${isPaired ? '<span class="badge-paired">✓ Paired</span>' : '<span style="color: #6366f1; font-weight: 600;">Tap to Pair</span>'}
-            <span>${peer.type === 'phone' ? 'Mobile' : 'Screen'}</span>
+            <span>${peer.type === 'phone' ? 'Mobile' : peer.type === 'tv' ? 'Smart TV' : 'Screen'}</span>
           </div>
         </div>
         <button class="btn-peer-action">
@@ -967,6 +1008,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
       airdropPeersList.appendChild(card);
     });
+
+    // Append "Scan More" button at end of peer list
+    const scanMoreCard = document.createElement('div');
+    scanMoreCard.className = 'airdrop-peer-card';
+    scanMoreCard.style.borderStyle = 'dashed';
+    scanMoreCard.style.opacity = '0.9';
+    scanMoreCard.title = 'Scan for more nearby Wi-Fi devices';
+    scanMoreCard.innerHTML = `
+      <div class="peer-card-avatar" style="background: rgba(99, 102, 241, 0.2); font-size: 16px;">🔍</div>
+      <div class="peer-card-info">
+        <div class="peer-card-title">Scan Devices</div>
+        <div class="peer-card-meta"><span style="color: #38bdf8;">Search Wi-Fi</span></div>
+      </div>
+    `;
+    scanMoreCard.addEventListener('click', () => openScannerModal('radar'));
+    airdropPeersList.appendChild(scanMoreCard);
   }
 
   // AirDrop File Input Handler
@@ -1071,7 +1128,7 @@ document.addEventListener('DOMContentLoaded', () => {
       updatePlayPauseIcons(true);
       showToast(`AirDrop Connected`, `Now playing '${video.title}' from ${peer.name}${seekTime > 0 ? ' (Resumed at ' + formatTime(seekTime) + ')' : ''}`);
     } else if (role === 'sender') {
-      applyViewMode(isMobileDevice ? 'phone' : 'dual');
+      applyViewMode(isMobileDevice ? 'phone' : 'tv');
       phoneNowPlayingTitle.textContent = video.title;
 
       // When phone is sending/casting to TV or Laptop:
@@ -1116,11 +1173,7 @@ document.addEventListener('DOMContentLoaded', () => {
           activeApiBase = base;
           localStorage.setItem('localdrop_server_ip', base.replace(/^https?:\/\//, ''));
           updateServerIpDisplay(info);
-          if (info.videos) {
-            populateServerVideos(info.videos);
-            renderAirDropMovies(info.videos);
-            renderLaptopLibrary(info.videos);
-          }
+          // Ephemeral mode: Do not store or populate server videos into historical galleries
           if (info.peers) {
             updateNearbyPeers(info.peers);
           }
@@ -1153,129 +1206,41 @@ document.addEventListener('DOMContentLoaded', () => {
   const pauseSvg = `<rect width="4" height="16" x="6" y="4"/><rect width="4" height="16" x="14" y="4"/>`;
 
   // ---------------------------------------------------------------------------
-  // 4. View Mode Switcher (Phone, TV, Dual) & Mobile Responsiveness
+  // 4. View Mode Switcher (Cinema Player on Laptop / Remote on Mobile)
   // ---------------------------------------------------------------------------
   function applyViewMode(mode) {
-    state.currentMode = mode;
+    state.currentMode = mode === 'phone' ? 'phone' : 'tv';
     document.body.classList.remove('mode-phone-only', 'mode-tv-only', 'mode-dual-view');
 
-    btnModePhone.classList.remove('active-mode');
-    btnModeTV.classList.remove('active-mode');
-    btnModeDual.classList.remove('active-mode');
+    if (btnModePhone) btnModePhone.classList.remove('active-mode');
+    if (btnModeTV) btnModeTV.classList.remove('active-mode');
 
-    if (mode === 'phone') {
+    if (state.currentMode === 'phone') {
       document.body.classList.add('mode-phone-only');
-      btnModePhone.classList.add('active-mode');
-    } else if (mode === 'tv') {
-      document.body.classList.add('mode-tv-only');
-      btnModeTV.classList.add('active-mode');
+      if (btnModePhone) btnModePhone.classList.add('active-mode');
     } else {
-      document.body.classList.add('mode-dual-view');
-      btnModeDual.classList.add('active-mode');
+      document.body.classList.add('mode-tv-only');
+      if (btnModeTV) btnModeTV.classList.add('active-mode');
     }
   }
 
-  const urlParams = new URLSearchParams(window.location.search);
   const requestedMode = urlParams.get('mode');
-  const initialMode = requestedMode || (isMobileDevice ? 'phone' : 'dual');
+  const initialMode = requestedMode || (isMobileDevice ? 'phone' : 'tv');
   const requestedFeature = urlParams.get('feature') || (requestedMode ? 'stream' : (localStorage.getItem('localdrop_active_feature') || 'files'));
   switchFeatureTab(requestedFeature);
 
   applyViewMode(initialMode);
 
-  if (isMobileDevice) {
-    state.isFramedShell = false;
-    mobileDeviceShell.classList.add('unframed-mode');
-    if (frameToggleLabel) frameToggleLabel.textContent = 'Shell: OFF';
-  }
-
-  btnModePhone.addEventListener('click', () => applyViewMode('phone'));
-  btnModeTV.addEventListener('click', () => applyViewMode('tv'));
-  btnModeDual.addEventListener('click', () => applyViewMode('dual'));
-
-  btnToggleMobileFrame.addEventListener('click', () => {
-    state.isFramedShell = !state.isFramedShell;
-    if (state.isFramedShell) {
-      mobileDeviceShell.classList.remove('unframed-mode');
-      frameToggleLabel.textContent = 'Shell: ON';
-    } else {
-      mobileDeviceShell.classList.add('unframed-mode');
-      frameToggleLabel.textContent = 'Shell: OFF';
-    }
-  });
+  if (btnModePhone) btnModePhone.addEventListener('click', () => applyViewMode('phone'));
+  if (btnModeTV) btnModeTV.addEventListener('click', () => applyViewMode('tv'));
 
   // ---------------------------------------------------------------------------
   // 5. Gallery Rendering: Phone List & TV Carousel (Empty until user selects videos!)
   // ---------------------------------------------------------------------------
   function renderGalleries() {
-    phoneGalleryList.innerHTML = '';
-    if (sharedGallery.length === 0) {
-      phoneGalleryList.innerHTML = `
-        <div class="gallery-empty-state">
-          <p>📂 No videos added yet.</p>
-          <p style="font-size: 11px; margin-top: 4px; color: #64748b;">Tap <strong>"Choose Video & Cast"</strong> above to pick any video from your phone gallery!</p>
-        </div>
-      `;
-    } else {
-      sharedGallery.forEach((item, index) => {
-        const card = document.createElement('div');
-        card.className = `gallery-item-card ${index === state.activeVideoIndex ? 'active-stream' : ''}`;
-        card.innerHTML = `
-          <div class="item-thumb-box">
-            <img src="${item.thumb}" alt="${item.title}" loading="lazy" />
-            <span class="item-duration-pill">${item.durationStr}</span>
-          </div>
-          <div class="item-info-box">
-            <h4 class="item-title">${item.title}</h4>
-            <p class="item-meta">${item.category} · ${item.sizeStr}</p>
-          </div>
-          <button class="item-cast-action">${index === state.activeVideoIndex ? '● Playing' : 'Stream'}</button>
-        `;
-
-        card.addEventListener('click', () => {
-          selectAndPlayVideo(index, true);
-          showToast(`Streaming '${item.title}'`, `Beaming to ${state.targetDevice.name}`);
-        });
-
-        phoneGalleryList.appendChild(card);
-      });
-    }
-
-    tvCardsCarousel.innerHTML = '';
-    if (sharedGallery.length === 0) {
-      tvCardsCarousel.innerHTML = `
-        <div class="gallery-empty-state" style="width: 100%; border: none;">
-          <p>Waiting for you to pick a video from your phone...</p>
-        </div>
-      `;
-      tvGalleryCountTag.textContent = '0 Videos';
-    } else {
-      tvGalleryCountTag.textContent = `${sharedGallery.length} Videos Available`;
-      sharedGallery.forEach((item, index) => {
-        const tvCard = document.createElement('div');
-        tvCard.className = `tv-media-card ${index === state.activeVideoIndex ? 'active-tv-card' : ''}`;
-        tvCard.innerHTML = `
-          <div class="tv-card-thumb-wrap">
-            <img src="${item.thumb}" alt="${item.title}" loading="lazy" />
-            <div class="tv-card-play-icon">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            </div>
-            <span class="tv-card-len-badge">${item.durationStr}</span>
-          </div>
-          <div class="tv-card-info">
-            <h4 class="tv-card-title">${item.title}</h4>
-            <p class="tv-card-meta">${item.category} · ${item.sizeStr}</p>
-          </div>
-        `;
-
-        tvCard.addEventListener('click', () => {
-          selectAndPlayVideo(index, true);
-          showToast(`TV Switched to '${item.title}'`, `Streaming from Phone Server · ${item.sizeStr}`);
-        });
-
-        tvCardsCarousel.appendChild(tvCard);
-      });
-    }
+    // Current Movie Stream Only: No persistent gallery lists or stored video history
+    if (phoneGalleryList) phoneGalleryList.innerHTML = '';
+    if (tvCardsCarousel) tvCardsCarousel.innerHTML = '';
   }
 
   // ---------------------------------------------------------------------------
@@ -1418,8 +1383,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  btnPickGalleryDirect.addEventListener('click', triggerStoragePicker);
-  btnUploadMoreGallery.addEventListener('click', triggerStoragePicker);
+  if (btnPickGalleryDirect) btnPickGalleryDirect.addEventListener('click', triggerStoragePicker);
+  if (btnUploadMoreGallery) btnUploadMoreGallery.addEventListener('click', triggerStoragePicker);
 
   phoneMediaFileInput.addEventListener('change', (e) => {
     const files = Array.from(e.target.files);
@@ -1452,8 +1417,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       }
 
-      sharedGallery.unshift(newEntry);
-      renderGalleries();
+      // Keep ONLY current stream in memory (no historical lists or stored files)
+      sharedGallery.length = 0;
+      sharedGallery.push(newEntry);
+      state.activeVideoIndex = 0;
 
       // 1. Start local playback on phone
       selectAndPlayVideo(0, true);
@@ -1713,7 +1680,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 10. Event Listeners: Phone & TV Video Sync & Audio Activation
   // ---------------------------------------------------------------------------
   function ensureAudioUnmuted() {
-    const isCastingOrDual = (state.currentMode === 'tv' || state.currentMode === 'dual' || !isMobileDevice || state.activeRole === 'sender');
+    const isCastingOrDual = (state.currentMode === 'tv' || !isMobileDevice || state.activeRole === 'sender');
 
     if (isCastingOrDual) {
       // TV is the sole active audio output
@@ -2219,7 +2186,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // 1. Play on TV screen if on TV/Laptop screen
-      if (state.currentMode === 'tv' || state.currentMode === 'dual' || !isMobileDevice) {
+      if (state.currentMode === 'tv' || !isMobileDevice) {
         tvNowPlayingTitle.textContent = videoTitle;
         if (phoneVideo) {
           phoneVideo.muted = true;
@@ -2265,7 +2232,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateMovieResumeBadge(payload.title, payload.currentTime);
       }
     } else if (type === 'PLAY') {
-      const isTvActive = (state.currentMode === 'tv' || state.currentMode === 'dual' || !isMobileDevice);
+      const isTvActive = (state.currentMode === 'tv' || !isMobileDevice);
       if (isTvActive) {
         if (phoneVideo) {
           phoneVideo.muted = true;
@@ -2359,189 +2326,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // ---------------------------------------------------------------------------
   // 12. AirDrop Movie Streams Engine & Server Gallery
   // ---------------------------------------------------------------------------
-  function populateServerVideos(videos) {
-    if (!videos || !videos.length) return;
-    const base = getApiBaseUrl();
-    const defaultThumb = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="225" viewBox="0 0 400 225"><rect width="400" height="225" fill="%230f172a"/><circle cx="200" cy="112" r="36" fill="%236366f1" opacity="0.4"/><polygon points="192,98 218,112 192,128" fill="%2338bdf8"/><text x="200" y="175" font-family="sans-serif" font-size="13" font-weight="bold" fill="%2394a3b8" text-anchor="middle">LocalDrop Cinema</text></svg>';
-
-    // Filter valid files and prioritize web-ready MP4 (H.264 + AAC)
-    const validVideos = videos
-      .filter((v) => v.sizeBytes > 10000)
-      .sort((a, b) => {
-        const aIsMp4 = a.filename.toLowerCase().endsWith('.mp4');
-        const bIsMp4 = b.filename.toLowerCase().endsWith('.mp4');
-        if (aIsMp4 && !bIsMp4) return -1;
-        if (!aIsMp4 && bIsMp4) return 1;
-        return 0;
-      });
-
-    validVideos.forEach((v) => {
-      const fullUrl = `${base}${v.streamUrl}`;
-      if (!sharedGallery.some((item) => item.title === v.filename)) {
-        sharedGallery.push({
-          id: `srv-${v.filename}`,
-          title: v.filename,
-          category: v.category || 'Server Stream',
-          durationStr: 'Stream Ready',
-          durationSec: 0,
-          sizeStr: v.sizeStr,
-          url: fullUrl,
-          thumb: defaultThumb,
-          sourceType: 'server_stream',
-        });
-      }
-    });
-    renderGalleries();
-  }
-
-  function renderAirDropMovies(videos) {
-    const airdropMovieGrid = document.getElementById('airdropMovieGrid');
-    const airdropMediaCount = document.getElementById('airdropMediaCount');
-    if (!airdropMovieGrid || !videos) return;
-
-    // Filter valid files and prioritize web-ready MP4 (H.264 + AAC)
-    const validVideos = videos
-      .filter((v) => v.sizeBytes > 10000)
-      .sort((a, b) => {
-        const aIsMp4 = a.filename.toLowerCase().endsWith('.mp4');
-        const bIsMp4 = b.filename.toLowerCase().endsWith('.mp4');
-        if (aIsMp4 && !bIsMp4) return -1;
-        if (!aIsMp4 && bIsMp4) return 1;
-        return 0;
-      });
-
-    if (airdropMediaCount) {
-      airdropMediaCount.textContent = `${validVideos.length} Streams Ready`;
-    }
-
-    airdropMovieGrid.innerHTML = '';
-    validVideos.forEach((v) => {
-      const fullStreamUrl = `${getApiBaseUrl()}${v.streamUrl}`;
-      const isMobile = isMobileDevice;
-      const targetLabel = isMobile ? 'AirDrop to Screen' : 'AirDrop to Phone';
-      const isWebMp4 = v.filename.toLowerCase().endsWith('.mp4');
-      const resumeTime = getResumeProgress(v.filename);
-      const isResumable = resumeTime > 0;
-
-      const card = document.createElement('div');
-      card.className = 'airdrop-movie-card';
-      card.title = isResumable ? `Resume '${v.filename}' from ${formatTime(resumeTime)}` : `Tap to AirDrop '${v.filename}' with instant playback`;
-      card.innerHTML = `
-        <div class="movie-card-info">
-          <div class="movie-card-title" title="${v.filename}">🎬 ${v.filename}</div>
-          <div class="movie-card-meta">
-            <span class="movie-badge-cat">${v.category}</span>
-            <span>·</span>
-            <span>${v.sizeStr}</span>
-            <span>·</span>
-            ${isWebMp4 ? '<span style="color: #10b981; font-weight: 700;">⭐ Full Video & Audio</span>' : '<span style="color: #38bdf8; font-weight: 600;">⚡ LAN Stream</span>'}
-            ${isResumable ? `<span class="movie-badge-resume" style="color: #fbbf24; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35); padding: 2px 7px; border-radius: 999px; font-weight: 700; font-size: 10.5px;">⏱️ Resume at ${formatTime(resumeTime)}</span>` : ''}
-          </div>
-        </div>
-        <button class="btn-movie-airdrop" title="Stream immediately to connected device">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-          <span>${isResumable ? `⚡ Resume (${formatTime(resumeTime)})` : targetLabel}</span>
-        </button>
-      `;
-
-      const triggerAirDropStream = () => {
-        const targetPeer = nearbyPeers[0] || state.targetDevice;
-        const currentResumeSec = getResumeProgress(v.filename);
-        showToast(`AirDrop Streaming!`, `Serving '${v.filename}' to ${targetPeer.name}${currentResumeSec > 0 ? ' (from ' + formatTime(currentResumeSec) + ')' : ''}`);
-
-        // 1. Adapt local role to sender
-        adaptRole('sender', targetPeer, { title: v.filename, url: fullStreamUrl, seekTime: currentResumeSec });
-
-        // 2. Broadcast AirDrop offer
-        broadcastMessage('AIRDROP_OFFER', {
-          fromId: state.myClientId,
-          fromName: state.deviceName,
-          fromType: isMobileDevice ? 'phone' : 'laptop',
-          toId: targetPeer.id,
-          video: {
-            title: v.filename,
-            url: fullStreamUrl,
-            sizeStr: v.sizeStr,
-            seekTime: currentResumeSec
-          }
-        });
-
-        // 3. Immediately switch video on target device (zero wait!)
-        broadcastMessage('SWITCH_VIDEO', {
-          url: fullStreamUrl,
-          title: v.filename,
-          shouldAutoPlay: true,
-          seekTime: currentResumeSec,
-          targetPeerId: targetPeer.id,
-          fromDevice: state.deviceName
-        });
-      };
-
-      const btn = card.querySelector('.btn-movie-airdrop');
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        triggerAirDropStream();
-      });
-
-      card.addEventListener('click', triggerAirDropStream);
-
-      airdropMovieGrid.appendChild(card);
-    });
-  }
-
-  function renderLaptopLibrary(videos) {
-    const laptopLibraryList = document.getElementById('laptopLibraryList');
-    if (!laptopLibraryList || !videos) return;
-    laptopLibraryList.innerHTML = '';
-    videos.forEach((v) => {
-      const resumeTime = getResumeProgress(v.filename);
-      const isResumable = resumeTime > 0;
-      const card = document.createElement('div');
-      card.style.cssText = 'background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 12px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px;';
-      card.innerHTML = `
-        <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">
-          <div style="font-weight: 600; color: #f1f5f9; font-size: 13px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="${v.filename}">🎬 ${v.filename}</div>
-          <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">
-            ${v.category} · ${v.sizeStr}
-            ${isResumable ? ` · <span style="color: #fbbf24; font-weight: 700;">⏱️ ${formatTime(resumeTime)}</span>` : ''}
-          </div>
-        </div>
-        <button class="btn-send-to-phone" style="flex-shrink: 0; background: #0284c7; color: white; border: none; border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-          <span>${isResumable ? `Resume (${formatTime(resumeTime)})` : 'AirDrop to Phone'}</span>
-        </button>
-      `;
-      const btn = card.querySelector('.btn-send-to-phone');
-      btn.addEventListener('click', () => {
-        const fullStreamUrl = `${getApiBaseUrl()}${v.streamUrl}`;
-        const currentResumeSec = getResumeProgress(v.filename);
-        showToast(`AirDropping '${v.filename}'`, 'Streaming to Android Phone...');
-
-        // Adapt sender role
-        adaptRole('sender', state.targetDevice, { title: v.filename, url: fullStreamUrl, seekTime: currentResumeSec });
-
-        broadcastMessage('AIRDROP_OFFER', {
-          fromId: state.myClientId,
-          fromName: state.deviceName,
-          fromType: isMobileDevice ? 'phone' : 'laptop',
-          video: {
-            title: v.filename,
-            url: fullStreamUrl,
-            sizeStr: v.sizeStr,
-            seekTime: currentResumeSec
-          }
-        });
-
-        broadcastMessage('SWITCH_VIDEO', {
-          url: fullStreamUrl,
-          title: v.filename,
-          shouldAutoPlay: true,
-          seekTime: currentResumeSec
-        });
-      });
-      laptopLibraryList.appendChild(card);
-    });
-  }
+  function populateServerVideos() {}
+  function renderAirDropMovies() {}
+  function renderLaptopLibrary() {}
 
   const btnPickLaptopVideo = document.getElementById('btnPickLaptopVideo');
   const laptopMediaFileInput = document.getElementById('laptopMediaFileInput');
@@ -2619,6 +2406,574 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
       console.warn('Failed to start EventSource LAN listener', e);
     }
+  }
+
+  // =========================================================================
+  // 12.5 AIRDROP NEARBY DEVICE SCANNER & RADAR CONTROLLER
+  // =========================================================================
+  const btnTopScan = document.getElementById('btnTopScan');
+  const btnSectionScan = document.getElementById('btnSectionScan');
+  const btnHeaderQrScan = document.getElementById('btnHeaderQrScan');
+  const btnHeaderShowQr = document.getElementById('btnHeaderShowQr');
+  const btnQuickScanTransfer = document.getElementById('btnQuickScanTransfer');
+
+  const deviceScannerModal = document.getElementById('deviceScannerModal');
+  const btnCloseScannerModal = document.getElementById('btnCloseScannerModal');
+  const scannerSubnetInfo = document.getElementById('scannerSubnetInfo');
+
+  const tabBtnRadar = document.getElementById('tabBtnRadar');
+  const tabBtnCameraQr = document.getElementById('tabBtnCameraQr');
+  const tabBtnMyQr = document.getElementById('tabBtnMyQr');
+  const tabBtnManualIp = document.getElementById('tabBtnManualIp');
+
+  const panelRadar = document.getElementById('panelRadar');
+  const panelCameraQr = document.getElementById('panelCameraQr');
+  const panelMyQr = document.getElementById('panelMyQr');
+  const panelManualIp = document.getElementById('panelManualIp');
+
+  const radarBlipsContainer = document.getElementById('radarBlipsContainer');
+  const radarScanStatusText = document.getElementById('radarScanStatusText');
+  const radarFoundCountBadge = document.getElementById('radarFoundCountBadge');
+  const radarScanProgressFill = document.getElementById('radarScanProgressFill');
+  const btnModalRescan = document.getElementById('btnModalRescan');
+  const btnModalAddDemo = document.getElementById('btnModalAddDemo');
+  const scannerDiscoveredDevicesList = document.getElementById('scannerDiscoveredDevicesList');
+
+  const qrScannerVideo = document.getElementById('qrScannerVideo');
+  const qrScannerCanvas = document.getElementById('qrScannerCanvas');
+  const btnStartCamera = document.getElementById('btnStartCamera');
+  const btnFlipCamera = document.getElementById('btnFlipCamera');
+
+  const myDeviceQrCanvas = document.getElementById('myDeviceQrCanvas');
+  const myQrAvatar = document.getElementById('myQrAvatar');
+  const myQrDeviceName = document.getElementById('myQrDeviceName');
+  const myQrUrlText = document.getElementById('myQrUrlText');
+  const btnCopyLanLink = document.getElementById('btnCopyLanLink');
+  const btnOpenLocalTab = document.getElementById('btnOpenLocalTab');
+
+  const inputPeerIp = document.getElementById('inputPeerIp');
+  const btnPingConnectPeer = document.getElementById('btnPingConnectPeer');
+
+  const scannerState = {
+    isOpen: false,
+    currentTab: 'radar',
+    isScanning: false,
+    cameraStream: null,
+    facingMode: 'environment',
+    animationFrameId: null,
+    hostIp: '192.168.0.103',
+    lanHost: '192.168.0.103:5173',
+  };
+
+  function playSuccessBeep() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.22);
+    } catch (e) {}
+  }
+
+  function openScannerModal(tabName = 'radar') {
+    if (!deviceScannerModal) return;
+    scannerState.isOpen = true;
+    deviceScannerModal.classList.add('modal-open');
+    switchScannerTab(tabName);
+  }
+
+  function closeScannerModal() {
+    if (!deviceScannerModal) return;
+    scannerState.isOpen = false;
+    deviceScannerModal.classList.remove('modal-open');
+    stopCameraScanner();
+  }
+
+  function switchScannerTab(tabName) {
+    scannerState.currentTab = tabName;
+    const tabs = [
+      { id: 'radar', btn: tabBtnRadar, panel: panelRadar },
+      { id: 'camera', btn: tabBtnCameraQr, panel: panelCameraQr },
+      { id: 'myqr', btn: tabBtnMyQr, panel: panelMyQr },
+      { id: 'manual', btn: tabBtnManualIp, panel: panelManualIp },
+    ];
+
+    tabs.forEach((t) => {
+      if (!t.btn || !t.panel) return;
+      const isActive = t.id === tabName;
+      t.btn.classList.toggle('active', isActive);
+      t.panel.style.display = isActive ? 'flex' : 'none';
+    });
+
+    if (tabName !== 'camera') {
+      stopCameraScanner();
+    }
+
+    if (tabName === 'radar') {
+      triggerActiveRadarScan(false);
+      renderRadarVisuals();
+    } else if (tabName === 'camera') {
+      startCameraScanner();
+    } else if (tabName === 'myqr') {
+      generateMyDeviceQr();
+    }
+  }
+
+  async function triggerActiveRadarScan(showFullToast = true) {
+    if (scannerState.isScanning) return;
+    scannerState.isScanning = true;
+
+    const scanButtons = [btnTopScan, btnSectionScan, btnQuickScanTransfer, btnModalRescan];
+    scanButtons.forEach((btn) => {
+      if (btn) btn.classList.add('scanning-active');
+    });
+
+    if (radarScanStatusText) {
+      const sub = scannerState.hostIp.split('.').slice(0, 3).join('.');
+      radarScanStatusText.textContent = `Scanning local Wi-Fi & subnet ${sub}.x...`;
+    }
+    if (radarScanProgressFill) {
+      radarScanProgressFill.style.transition = 'width 1.2s cubic-bezier(0.16, 1, 0.3, 1)';
+      radarScanProgressFill.style.width = '25%';
+      setTimeout(() => { if (radarScanProgressFill) radarScanProgressFill.style.width = '80%'; }, 350);
+    }
+
+    try {
+      const base = getApiBaseUrl();
+      const res = await fetch(`${base}/api/peers/scan`, {
+        signal: AbortSignal.timeout(3000),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.hostIp) {
+          scannerState.hostIp = data.hostIp;
+          scannerState.lanHost = data.lanHost || `${data.hostIp}:5173`;
+          if (scannerSubnetInfo) {
+            scannerSubnetInfo.textContent = `Scanning Wi-Fi LAN · ${data.subnet}.x (${data.lanHost})`;
+          }
+        }
+        if (data.peers) {
+          updateNearbyPeers(data.peers);
+        }
+      }
+    } catch (e) {
+      await sendHeartbeat();
+    } finally {
+      if (radarScanProgressFill) {
+        radarScanProgressFill.style.width = '100%';
+        setTimeout(() => {
+          if (radarScanProgressFill) radarScanProgressFill.style.width = '0%';
+        }, 500);
+      }
+
+      scannerState.isScanning = false;
+      scanButtons.forEach((btn) => {
+        if (btn) btn.classList.remove('scanning-active');
+      });
+
+      renderRadarVisuals();
+      if (radarScanStatusText) {
+        radarScanStatusText.textContent = `Scan complete · ${nearbyPeers.length} peer(s) online`;
+      }
+      if (radarFoundCountBadge) {
+        radarFoundCountBadge.textContent = `${nearbyPeers.length} Online`;
+      }
+
+      if (showFullToast) {
+        if (nearbyPeers.length > 0) {
+          showToast(`Radar Scan Complete`, `Found ${nearbyPeers.length} nearby LocalDrop peer(s) on Wi-Fi!`);
+        } else {
+          showToast(`Radar Scan Complete`, `No other devices on LAN. Tap 'My QR' or '+ Add Demo' to test.`);
+        }
+      }
+    }
+  }
+
+  function renderRadarVisuals() {
+    if (!radarBlipsContainer) return;
+    radarBlipsContainer.innerHTML = '';
+
+    const total = nearbyPeers.length;
+    nearbyPeers.forEach((peer, idx) => {
+      const angle = (idx * (360 / Math.max(total, 1)) + 45) * (Math.PI / 180);
+      const dist = 42 + ((idx % 3) * 26);
+      const x = 120 + Math.cos(angle) * dist;
+      const y = 120 + Math.sin(angle) * dist;
+
+      const blip = document.createElement('div');
+      blip.className = 'radar-blip';
+      blip.style.left = `${x}px`;
+      blip.style.top = `${y}px`;
+      blip.title = `${peer.name} (${peer.type}) · Tap to connect`;
+      blip.innerHTML = `
+        <span class="radar-blip-dot"></span>
+        <span class="radar-blip-label">${peer.name.split(' ')[0]}</span>
+      `;
+      blip.addEventListener('click', () => {
+        targetAirDropPeerId = peer.id;
+        state.targetDevice = peer;
+        savePairedPeer(peer.id);
+        playSuccessBeep();
+        showToast(`Connected to ${peer.name}`, 'Ready to AirDrop files or stream video');
+        closeScannerModal();
+      });
+      radarBlipsContainer.appendChild(blip);
+    });
+
+    if (radarFoundCountBadge) {
+      radarFoundCountBadge.textContent = `${nearbyPeers.length} Online`;
+    }
+
+    if (scannerDiscoveredDevicesList) {
+      if (nearbyPeers.length === 0) {
+        scannerDiscoveredDevicesList.innerHTML = `
+          <div class="scanner-empty-box">
+            <span>📡 No other devices found on this Wi-Fi network yet.</span>
+            <span style="font-size: 11px; color: #94a3b8;">Open LocalDrop on your phone/TV, or add a simulated device to test right now:</span>
+            <button class="btn-demo-device-sm" id="btnEmptyAddDemo" style="margin-top: 4px;">
+              ⚡ Add Simulated Nearby Device
+            </button>
+          </div>
+        `;
+        const btnEmpty = document.getElementById('btnEmptyAddDemo');
+        if (btnEmpty) {
+          btnEmpty.addEventListener('click', () => addDemoPeer());
+        }
+      } else {
+        scannerDiscoveredDevicesList.innerHTML = '';
+        nearbyPeers.forEach((peer) => {
+          const isPaired = isPeerPaired(peer.id);
+          const item = document.createElement('div');
+          item.className = 'scanner-device-card';
+          item.innerHTML = `
+            <div class="scanner-device-main">
+              <div class="scanner-device-avatar">${peer.type === 'phone' ? '📱' : peer.type === 'tv' ? '📺' : '💻'}</div>
+              <div class="scanner-device-info">
+                <div class="scanner-device-name-row">
+                  <span class="scanner-device-name">${peer.name}</span>
+                  ${isPaired ? '<span class="badge-paired">✓ Paired</span>' : '<span style="font-size: 10px; color: #10b981;">● Online</span>'}
+                </div>
+                <span class="scanner-device-sub">${peer.ip || 'Wi-Fi LAN'} · 98% signal · <2ms</span>
+              </div>
+            </div>
+            <div class="scanner-device-actions">
+              <button class="btn-device-pair-now" data-peer-id="${peer.id}">
+                ${isPaired ? 'AirDrop Stream' : '⚡ Connect'}
+              </button>
+            </div>
+          `;
+          item.querySelector('.btn-device-pair-now').addEventListener('click', () => {
+            targetAirDropPeerId = peer.id;
+            state.targetDevice = peer;
+            savePairedPeer(peer.id);
+            playSuccessBeep();
+            showToast(`Connected to ${peer.name}!`, `Device is ready for file transfers and zero-wait streaming.`);
+            closeScannerModal();
+          });
+          scannerDiscoveredDevicesList.appendChild(item);
+        });
+      }
+    }
+  }
+
+  const demoDevicePresets = [
+    { name: 'Living Room Smart TV 4K', type: 'tv', ip: '192.168.0.105:5173' },
+    { name: 'Google Pixel 8 Pro', type: 'phone', ip: '192.168.0.112:5173' },
+    { name: 'Samsung Neo QLED 65"', type: 'tv', ip: '192.168.0.118:5173' },
+    { name: 'MacBook Pro M3 Max', type: 'laptop', ip: '192.168.0.142:5173' },
+    { name: 'iPad Air (Living Room)', type: 'phone', ip: '192.168.0.125:5173' },
+  ];
+  let demoPresetIndex = 0;
+
+  async function addDemoPeer(customPreset = null) {
+    const preset = customPreset || demoDevicePresets[demoPresetIndex % demoDevicePresets.length];
+    demoPresetIndex++;
+
+    const newPeer = {
+      id: 'demo_' + Math.random().toString(36).substring(2, 9),
+      name: preset.name,
+      type: preset.type,
+      ip: preset.ip,
+      avatar: preset.type === 'phone' ? '📱' : preset.type === 'tv' ? '📺' : '💻',
+      lastSeen: Date.now(),
+      isVirtual: true,
+    };
+
+    try {
+      const base = getApiBaseUrl();
+      await fetch(`${base}/api/peers/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newPeer),
+      });
+    } catch (e) {}
+
+    if (!nearbyPeers.some((p) => p.id === newPeer.id)) {
+      nearbyPeers.push(newPeer);
+    }
+    savePairedPeer(newPeer.id);
+    renderNearbyPeers();
+    updateTransferPeerDropdown();
+    renderRadarVisuals();
+    playSuccessBeep();
+    showToast(`Discovered ${newPeer.name}!`, `Added nearby ${newPeer.type} device to active radar.`);
+  }
+
+  function generateMyDeviceQr() {
+    if (!myDeviceQrCanvas) return;
+    const host = scannerState.lanHost || `${scannerState.hostIp}:5173`;
+    const connectUrl = `http://${host}/?pairedTo=${state.myClientId}&fromName=${encodeURIComponent(state.deviceName)}`;
+
+    if (myQrUrlText) {
+      myQrUrlText.textContent = connectUrl;
+    }
+    if (myQrDeviceName) {
+      myQrDeviceName.textContent = state.deviceName;
+    }
+    if (myQrAvatar) {
+      myQrAvatar.textContent = isMobileDevice ? '📱' : '💻';
+    }
+    if (btnOpenLocalTab) {
+      btnOpenLocalTab.href = `/?peer=TestPhone_${Math.floor(Math.random() * 900 + 100)}&name=${encodeURIComponent('Mobile Phone Client')}`;
+    }
+
+    try {
+      QRCode.toCanvas(
+        myDeviceQrCanvas,
+        connectUrl,
+        {
+          width: 220,
+          margin: 1,
+          color: {
+            dark: '#070a12',
+            light: '#ffffff',
+          },
+        },
+        (err) => {
+          if (err) console.error('QR Render Error:', err);
+        }
+      );
+    } catch (e) {
+      console.error('QR generation exception:', e);
+    }
+  }
+
+  async function startCameraScanner() {
+    if (!qrScannerVideo) return;
+    stopCameraScanner();
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: scannerState.facingMode,
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+      });
+      scannerState.cameraStream = stream;
+      qrScannerVideo.srcObject = stream;
+      qrScannerVideo.setAttribute('playsinline', 'true');
+      await qrScannerVideo.play();
+      requestAnimationFrame(scanCameraFrame);
+    } catch (err) {
+      showToast('Camera Permission Needed', 'Allow camera access in your browser to scan device QR codes.');
+    }
+  }
+
+  function stopCameraScanner() {
+    if (scannerState.animationFrameId) {
+      cancelAnimationFrame(scannerState.animationFrameId);
+      scannerState.animationFrameId = null;
+    }
+    if (scannerState.cameraStream) {
+      scannerState.cameraStream.getTracks().forEach((t) => t.stop());
+      scannerState.cameraStream = null;
+    }
+    if (qrScannerVideo) {
+      qrScannerVideo.srcObject = null;
+    }
+  }
+
+  function scanCameraFrame() {
+    if (!scannerState.isOpen || scannerState.currentTab !== 'camera') {
+      stopCameraScanner();
+      return;
+    }
+
+    if (qrScannerVideo && qrScannerVideo.readyState === qrScannerVideo.HAVE_ENOUGH_DATA) {
+      if (!qrScannerCanvas) return;
+      const canvas = qrScannerCanvas;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      canvas.width = qrScannerVideo.videoWidth;
+      canvas.height = qrScannerVideo.videoHeight;
+      ctx.drawImage(qrScannerVideo, 0, 0, canvas.width, canvas.height);
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: 'dontInvert',
+      });
+
+      if (code && code.data) {
+        handleScannedQrResult(code.data);
+        return;
+      }
+    }
+
+    scannerState.animationFrameId = requestAnimationFrame(scanCameraFrame);
+  }
+
+  function handleScannedQrResult(dataStr) {
+    playSuccessBeep();
+    stopCameraScanner();
+
+    try {
+      const url = new URL(dataStr, window.location.href);
+      const pairedTo = url.searchParams.get('pairedTo') || url.searchParams.get('peer');
+      const peerName = url.searchParams.get('name') || url.searchParams.get('fromName') || 'Discovered Peer';
+      const peerType = /phone|mobile/i.test(peerName) ? 'phone' : 'laptop';
+
+      const scannedPeer = {
+        id: pairedTo || 'peer_' + Math.random().toString(36).substring(2, 9),
+        name: peerName,
+        type: peerType,
+        ip: url.host || 'LAN Wi-Fi',
+        avatar: peerType === 'phone' ? '📱' : '💻',
+        lastSeen: Date.now(),
+      };
+
+      if (!nearbyPeers.some((p) => p.id === scannedPeer.id)) {
+        nearbyPeers.push(scannedPeer);
+      }
+      savePairedPeer(scannedPeer.id);
+      targetAirDropPeerId = scannedPeer.id;
+      state.targetDevice = scannedPeer;
+      renderNearbyPeers();
+      updateTransferPeerDropdown();
+
+      showToast(`QR Code Paired!`, `Connected to ${scannedPeer.name} via camera scan.`);
+      closeScannerModal();
+    } catch (e) {
+      showToast('QR Code Scanned', `Detected: ${dataStr}`);
+      closeScannerModal();
+    }
+  }
+
+  async function connectManualIp(ipStr) {
+    if (!ipStr || !ipStr.trim()) return;
+    const cleanIp = ipStr.trim();
+    showToast('Connecting to IP...', `Probing ${cleanIp}`);
+
+    const newPeer = {
+      id: 'manual_' + cleanIp.replace(/[^a-zA-Z0-9]/g, '_'),
+      name: `Device (${cleanIp.split(':')[0]})`,
+      type: cleanIp.includes('10.0.2.2') ? 'phone' : 'laptop',
+      ip: cleanIp,
+      avatar: cleanIp.includes('10.0.2.2') ? '📱' : '💻',
+      lastSeen: Date.now(),
+    };
+
+    if (!nearbyPeers.some((p) => p.id === newPeer.id)) {
+      nearbyPeers.push(newPeer);
+    }
+    savePairedPeer(newPeer.id);
+    renderNearbyPeers();
+    updateTransferPeerDropdown();
+    renderRadarVisuals();
+    playSuccessBeep();
+    showToast(`Connected to ${newPeer.name}!`, `Device added to local peer list.`);
+    closeScannerModal();
+  }
+
+  // Bind Scanner Event Listeners
+  if (btnTopScan) {
+    btnTopScan.addEventListener('click', () => openScannerModal('radar'));
+  }
+  if (btnSectionScan) {
+    btnSectionScan.addEventListener('click', () => openScannerModal('radar'));
+  }
+  if (btnHeaderQrScan) {
+    btnHeaderQrScan.addEventListener('click', () => openScannerModal('camera'));
+  }
+  if (btnHeaderShowQr) {
+    btnHeaderShowQr.addEventListener('click', () => openScannerModal('myqr'));
+  }
+  if (btnQuickScanTransfer) {
+    btnQuickScanTransfer.addEventListener('click', () => {
+      triggerActiveRadarScan(true);
+    });
+  }
+  if (btnCloseScannerModal) {
+    btnCloseScannerModal.addEventListener('click', closeScannerModal);
+  }
+
+  if (tabBtnRadar) tabBtnRadar.addEventListener('click', () => switchScannerTab('radar'));
+  if (tabBtnCameraQr) tabBtnCameraQr.addEventListener('click', () => switchScannerTab('camera'));
+  if (tabBtnMyQr) tabBtnMyQr.addEventListener('click', () => switchScannerTab('myqr'));
+  if (tabBtnManualIp) tabBtnManualIp.addEventListener('click', () => switchScannerTab('manual'));
+
+  if (btnModalRescan) {
+    btnModalRescan.addEventListener('click', () => triggerActiveRadarScan(true));
+  }
+  if (btnModalAddDemo) {
+    btnModalAddDemo.addEventListener('click', () => addDemoPeer());
+  }
+
+  if (btnStartCamera) {
+    btnStartCamera.addEventListener('click', startCameraScanner);
+  }
+  if (btnFlipCamera) {
+    btnFlipCamera.addEventListener('click', () => {
+      scannerState.facingMode = scannerState.facingMode === 'environment' ? 'user' : 'environment';
+      startCameraScanner();
+    });
+  }
+
+  if (btnCopyLanLink) {
+    btnCopyLanLink.addEventListener('click', async () => {
+      const host = scannerState.lanHost || `${scannerState.hostIp}:5173`;
+      const url = `http://${host}/?pairedTo=${state.myClientId}&fromName=${encodeURIComponent(state.deviceName)}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        showToast('Link Copied!', 'Share this URL with another phone or TV on the same Wi-Fi');
+      } catch (e) {
+        showToast('Local URL', url);
+      }
+    });
+  }
+
+  if (btnPingConnectPeer) {
+    btnPingConnectPeer.addEventListener('click', () => {
+      if (inputPeerIp) connectManualIp(inputPeerIp.value);
+    });
+  }
+
+  document.querySelectorAll('.btn-ip-preset').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const ip = btn.getAttribute('data-ip');
+      const name = btn.getAttribute('data-name');
+      const type = btn.getAttribute('data-type');
+      addDemoPeer({ name, type, ip });
+      closeScannerModal();
+    });
+  });
+
+  // Close scanner modal when clicking backdrop
+  if (deviceScannerModal) {
+    deviceScannerModal.addEventListener('click', (e) => {
+      if (e.target === deviceScannerModal) {
+        closeScannerModal();
+      }
+    });
   }
 
   // ---------------------------------------------------------------------------

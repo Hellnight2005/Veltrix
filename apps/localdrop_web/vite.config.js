@@ -250,6 +250,62 @@ export default defineConfig({
             return;
           }
 
+          // 0.11 Manual / QR Peer Registration
+          if (req.url === '/api/peers/register' && req.method === 'POST') {
+            let body = '';
+            req.on('data', (chunk) => { body += chunk; });
+            req.on('end', () => {
+              try {
+                const peer = JSON.parse(body);
+                peer.lastSeen = Date.now();
+                peer.remoteIp = peer.ip || req.socket.remoteAddress;
+                connectedPeers.set(peer.id, peer);
+
+                const peerList = Array.from(connectedPeers.values());
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: true, peer, peers: peerList }));
+
+                broadcastToAll({
+                  type: 'PEERS_UPDATED',
+                  payload: { peers: peerList }
+                });
+              } catch (e) {
+                res.writeHead(400);
+                res.end('Invalid JSON');
+              }
+            });
+            return;
+          }
+
+          // 0.12 Active Network Scan Endpoint
+          if (req.url === '/api/peers/scan') {
+            const hostIp = getLocalIp();
+            const subnet = hostIp.split('.').slice(0, 3).join('.');
+            const now = Date.now();
+            for (const [id, p] of connectedPeers.entries()) {
+              if (now - p.lastSeen > 35000) {
+                connectedPeers.delete(id);
+              }
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              ok: true,
+              hostIp,
+              subnet,
+              lanHost: `${hostIp}:5173`,
+              peers: Array.from(connectedPeers.values()),
+              scannedAt: Date.now()
+            }));
+            return;
+          }
+
+          // 0.13 Quick Ping Endpoint
+          if (req.url === '/api/ping') {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, pong: true, time: Date.now() }));
+            return;
+          }
+
           if (req.url === '/api/peers' && req.method === 'GET') {
             const now = Date.now();
             for (const [id, p] of connectedPeers.entries()) {

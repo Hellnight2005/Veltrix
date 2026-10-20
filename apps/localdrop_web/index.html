@@ -37,31 +37,28 @@
         </button>
       </div>
 
-      <!-- Mode Selector Tabs: Phone, TV, Dual (for Video Stream) -->
+      <!-- Mode Selector Tabs: TV Player vs Mobile Remote (for Video Stream) -->
       <div class="mode-switch-group" id="streamModeSwitchGroup">
-        <button id="btnModePhone" class="mode-btn active-mode" title="View Phone Server & Remote Controller">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="20" x="5" y="2" rx="3"/><path d="M12 18h.01"/></svg>
-          <span>📱 Phone</span>
-        </button>
-        <button id="btnModeTV" class="mode-btn" title="View TV Screen Receiver">
+        <button id="btnModeTV" class="mode-btn active-mode" title="View Cinema Player Receiver">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="15" x="2" y="3" rx="2"/><path d="M12 18v4"/><path d="M8 22h8"/></svg>
-          <span>📺 TV Screen</span>
+          <span>📺 Cinema Player</span>
         </button>
-        <button id="btnModeDual" class="mode-btn" title="Side-by-side simulation of Phone streaming to TV">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="8" height="16" x="2" y="4" rx="2"/><rect width="10" height="12" x="12" y="6" rx="2"/><path d="M10 12h2"/></svg>
-          <span>⚡ Dual View</span>
+        <button id="btnModePhone" class="mode-btn" title="View Mobile Remote Controller">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="20" x="5" y="2" rx="3"/><path d="M12 18h.01"/></svg>
+          <span>📱 Mobile Remote</span>
         </button>
       </div>
 
       <div class="view-controls">
+        <button id="btnTopScan" class="btn-scan-radar-nav" title="Scan for Nearby Devices">
+          <svg class="scan-radar-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10"/><path d="M12 6a6 6 0 0 1 6 6"/><circle cx="12" cy="12" r="2"/></svg>
+          <span class="scan-btn-text">Scan Devices</span>
+          <span class="scan-radar-beacon"></span>
+        </button>
         <a id="btnDownloadApk" href="/LocalDrop-v1.0-debug.apk" download="LocalDrop-v1.0-debug.apk" class="btn-ghost-sm" title="Download Android APK" style="text-decoration: none; color: #10b981; border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.08);">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
           <span>📦 APK</span>
         </a>
-        <button id="btnToggleMobileFrame" class="btn-ghost-sm" title="Toggle Phone Shell Container">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="20" x="5" y="2" rx="3"/><path d="M12 18h.01"/></svg>
-          <span id="frameToggleLabel">Shell: ON</span>
-        </button>
       </div>
     </div>
   </header>
@@ -94,10 +91,26 @@
       <div class="airdrop-peers-zone">
         <div class="airdrop-zone-header">
           <div class="zone-title-group">
-            <span class="airdrop-title">⚡ Nearby AirDrop Devices</span>
-            <span class="airdrop-subtext">Automatic discovery · Tap any device to pair or beam video</span>
+            <div class="zone-title-badge-row">
+              <span class="airdrop-title">⚡ Nearby AirDrop Devices</span>
+              <span class="airdrop-peer-count" id="airdropPeerCount">Scanning LAN...</span>
+            </div>
+            <span class="airdrop-subtext">Automatic Wi-Fi discovery · Tap any device to pair, send files, or stream</span>
           </div>
-          <span class="airdrop-peer-count" id="airdropPeerCount">Scanning LAN...</span>
+          <div class="airdrop-header-actions">
+            <button id="btnSectionScan" class="btn-scan-action primary" title="Scan local Wi-Fi network for nearby devices">
+              <svg class="scan-spin-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10"/><circle cx="12" cy="2" r="2"/></svg>
+              <span>Scan Wi-Fi</span>
+            </button>
+            <button id="btnHeaderQrScan" class="btn-scan-action secondary" title="Scan QR Code with Camera to connect device">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect width="10" height="10" x="7" y="7" rx="1"/></svg>
+              <span>Scan QR</span>
+            </button>
+            <button id="btnHeaderShowQr" class="btn-scan-action ghost" title="Show QR Code for phone or TV to connect">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M16 16h5v5h-5z"/><path d="M21 12h-4"/></svg>
+              <span>My QR</span>
+            </button>
+          </div>
         </div>
         <div class="airdrop-peers-list" id="airdropPeersList">
           <div class="peer-scanning-skeleton">
@@ -188,7 +201,13 @@
           <!-- Target Peer Selection & Send Button -->
           <div class="send-action-row">
             <div class="target-device-picker-wrap">
-              <label class="input-label" for="transferTargetPeerSelect">Send to Device:</label>
+              <div class="target-picker-label-row">
+                <label class="input-label" for="transferTargetPeerSelect">Send to Device:</label>
+                <button type="button" id="btnQuickScanTransfer" class="btn-scan-pill-sm" title="Scan Wi-Fi for nearby devices">
+                  <svg class="scan-spin-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10"/><circle cx="12" cy="2" r="2"/></svg>
+                  <span>Scan</span>
+                </button>
+              </div>
               <select class="device-select-dropdown" id="transferTargetPeerSelect">
                 <option value="auto">⚡ Nearest Active Peer (Auto Broadcast)</option>
               </select>
@@ -256,32 +275,6 @@
   <!-- FEATURE 2: VIDEO STREAM & CINEMA WORKSPACE                                -->
   <!-- ========================================================================= -->
   <section class="feature-workspace" id="viewVideoStream" style="display: none;">
-  <!-- ========================================================================= -->
-  <!-- AIRDROP MOVIE STREAM SERVER (Instant 0-Wait Streaming to Any Device)      -->
-  <!-- ========================================================================= -->
-  <section class="airdrop-media-server-section" id="airdropMediaServerSection">
-    <div class="airdrop-media-container">
-      <div class="airdrop-media-header">
-        <div class="airdrop-media-title-group">
-          <div class="airdrop-media-title-row">
-            <span class="airdrop-media-icon">🎬</span>
-            <span class="airdrop-media-title">AirDrop Movie Streams</span>
-            <span class="media-live-tag">● Instant Play (0-Wait)</span>
-          </div>
-          <p class="airdrop-media-sub">Tap any movie on your phone or laptop to instantly stream and play full-screen on the connected device</p>
-        </div>
-        <div class="airdrop-media-badges">
-          <span class="media-count-badge" id="airdropMediaCount">Scanning...</span>
-        </div>
-      </div>
-      <div class="airdrop-movie-grid" id="airdropMovieGrid">
-        <div class="peer-scanning-skeleton">
-          <span class="pulse-loader"></span>
-          <span>Loading movies from LocalDrop media server...</span>
-        </div>
-      </div>
-    </div>
-  </section>
 
   <!-- Hidden File Input for Direct Peer AirDrop -->
   <input type="file" id="airdropPeerFileInput" accept="video/*,audio/*" style="display: none;">
@@ -294,18 +287,6 @@
     <!-- ========================================================================= -->
     <section class="phone-column-wrapper" id="phoneColumnWrapper">
       <div class="mobile-device-shell" id="mobileDeviceShell">
-        
-        <!-- Mobile Status Bar -->
-        <div class="mobile-status-bar" id="mobileStatusBar">
-          <span class="status-time" id="statusClock">16:45</span>
-          <div class="phone-speaker-notch"></div>
-          <div class="status-indicators">
-            <svg class="icon-wifi" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/></svg>
-            <span class="signal-tag">5G Wi-Fi</span>
-            <span class="battery-tag">97%</span>
-          </div>
-        </div>
-
         <!-- Phone App Viewport -->
         <div class="phone-app-viewport">
           
@@ -473,57 +454,11 @@
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
                 </button>
               </div>
-            </div>
-          </section>
-
-          <!-- Phone Media Gallery (Shared with TV) -->
-          <section class="phone-gallery-section">
-            <div class="gallery-header-row">
-              <div class="gallery-title-group">
-                <h3 class="gallery-heading">📱 Phone Gallery (Shared with TV)</h3>
-                <p class="gallery-sub">Tap any video to switch what plays on the TV</p>
-              </div>
-              <button class="btn-pick-more" id="btnUploadMoreGallery">+ Pick Video</button>
-            </div>
-
-            <!-- Dynamic List of Phone Videos -->
-            <div class="phone-gallery-list" id="phoneGalleryList">
-              <!-- Rendered via JavaScript -->
-            </div>
-          </section>
-
-          <!-- Bottom Navigation Bar -->
-          <nav class="phone-bottom-nav">
-            <button class="phone-nav-item active-nav" id="pNavCinema">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect width="14" height="14" x="1" y="5" rx="2" ry="2"/></svg>
-              <span>Server</span>
-            </button>
-            <button class="phone-nav-item" id="pNavGallery">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-              <span>Gallery</span>
-            </button>
-            <button class="phone-nav-item" id="pNavDevices">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="15" x="2" y="3" rx="2"/><path d="M12 18v4"/><path d="M8 22h8"/></svg>
-              <span>TVs & Screens</span>
-            </button>
-          </nav>
+          <!-- End of Phone Controller Content -->
         </div>
       </div>
     </section>
 
-    <!-- ========================================================================= -->
-    <!-- 2. STREAM PIPELINE BEAM (Visible in Dual View)                            -->
-    <!-- ========================================================================= -->
-    <div class="stream-beam-connector" id="streamBeamConnector">
-      <div class="beam-line">
-        <div class="beam-pulse-particle"></div>
-      </div>
-      <div class="beam-meta-card">
-        <span class="beam-speed-badge" id="beamSpeedBadge">78.4 MB/s</span>
-        <span class="beam-proto-badge">TCP LAN Stream</span>
-        <span class="beam-sha-badge" id="beamShaBadge">SHA-256 Verified</span>
-      </div>
-    </div>
 
     <!-- ========================================================================= -->
     <!-- 3. TV CLIENT SCREEN VIEW (Living Room TV Receiving Media from Phone)     -->
@@ -697,45 +632,6 @@
           </div>
         </div>
 
-        <!-- TV Shared Gallery Carousel (Showing Phone's Videos on the TV Screen!) -->
-        <section class="tv-shared-gallery-tray">
-          <div class="tray-header-row">
-            <div class="tray-title-group">
-              <h3 class="tray-title">📱 Shared Phone Media Gallery</h3>
-              <p class="tray-subtitle">Videos served live from Phone storage · Select any video using TV or Phone</p>
-            </div>
-            <span class="tray-count-tag" id="tvGalleryCountTag">4 Videos Available</span>
-          </div>
-
-          <div class="tv-cards-carousel" id="tvCardsCarousel">
-            <!-- Rendered via JavaScript -->
-          </div>
-        </section>
-
-        <!-- Laptop Video Sender (Send video files directly from Laptop to Android Phone / Emulator!) -->
-        <section class="laptop-video-sender-tray" style="margin-top: 18px; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 16px; padding: 18px 20px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
-            <div>
-              <h3 style="font-size: 16px; font-weight: 700; color: #f8fafc; display: flex; align-items: center; gap: 8px;">
-                <span>💻 Laptop Video Sender & Library</span>
-                <span style="font-size: 11px; background: rgba(56, 189, 248, 0.2); color: #38bdf8; padding: 2px 8px; border-radius: 999px; font-weight: 600;">Engine Active</span>
-              </h3>
-              <p style="font-size: 12px; color: #94a3b8; margin-top: 2px;">Share any video from this laptop directly to the connected Android Phone / Emulator</p>
-            </div>
-            <div style="display: flex; gap: 8px;">
-              <button id="btnPickLaptopVideo" class="btn-hero-cast" style="padding: 8px 16px; font-size: 13px; background: linear-gradient(135deg, #0284c7, #2563eb); border: none; border-radius: 8px; color: white; cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-                <span>📁 Pick Video from Laptop & Send</span>
-              </button>
-              <input type="file" id="laptopMediaFileInput" accept="video/*,audio/*" style="display: none;">
-            </div>
-          </div>
-
-          <!-- Quick Share Local Laptop Library Videos -->
-          <div id="laptopLibraryList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">
-            <!-- Rendered dynamically from /api/server-info -->
-          </div>
-        </section>
       </div>
     </section>
 
@@ -834,6 +730,205 @@
           </div>
         </button>
       </div>
+    </div>
+  </aside>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: Master Device Scanner & Radar                                     -->
+  <!-- ========================================================================= -->
+  <aside class="modal-backdrop" id="deviceScannerModal">
+    <div class="scanner-modal-sheet">
+      <!-- Modal Top Bar -->
+      <div class="modal-top-bar">
+        <div class="modal-title-box">
+          <div class="modal-title-row">
+            <span class="scanner-radar-icon">📡</span>
+            <h3 class="modal-title">Nearby Device Scanner</h3>
+            <span class="badge-live-radar">● Live Radar</span>
+          </div>
+          <p class="modal-sub" id="scannerSubnetInfo">Scanning Wi-Fi LAN · 192.168.0.x</p>
+        </div>
+        <button class="btn-close-modal" id="btnCloseScannerModal" title="Close Scanner">✕</button>
+      </div>
+
+      <!-- Scanner Navigation Tabs -->
+      <div class="scanner-tab-bar">
+        <button class="scanner-tab-btn active" id="tabBtnRadar" data-tab="radar">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10"/><path d="M12 6a6 6 0 0 1 6 6"/><circle cx="12" cy="12" r="2"/></svg>
+          <span>Radar Sweep</span>
+        </button>
+        <button class="scanner-tab-btn" id="tabBtnCameraQr" data-tab="camera">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect width="10" height="10" x="7" y="7" rx="1"/></svg>
+          <span>Camera QR</span>
+        </button>
+        <button class="scanner-tab-btn" id="tabBtnMyQr" data-tab="myqr">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M16 16h5v5h-5z"/><path d="M21 12h-4"/></svg>
+          <span>My QR Code</span>
+        </button>
+        <button class="scanner-tab-btn" id="tabBtnManualIp" data-tab="manual">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span>IP / Manual</span>
+        </button>
+      </div>
+
+      <!-- Tab Content 1: Radar Sweep -->
+      <div class="scanner-tab-panel active" id="panelRadar">
+        <div class="radar-scope-wrapper">
+          <div class="radar-scope">
+            <div class="radar-grid-ring ring-1"></div>
+            <div class="radar-grid-ring ring-2"></div>
+            <div class="radar-grid-ring ring-3"></div>
+            <div class="radar-crosshair-v"></div>
+            <div class="radar-crosshair-h"></div>
+            <div class="radar-sweep-beam" id="radarSweepBeam"></div>
+            <div class="radar-center-host" title="Your Current Device">
+              <span class="radar-host-dot"></span>
+              <span class="radar-host-label">YOU</span>
+            </div>
+            <!-- Blips positioned dynamically based on discovered devices -->
+            <div class="radar-blips-container" id="radarBlipsContainer"></div>
+          </div>
+          <div class="radar-scan-status-card">
+            <div class="scan-status-row">
+              <div class="scan-spinner-dot"></div>
+              <span class="scan-status-text" id="radarScanStatusText">Scanning local Wi-Fi (192.168.0.x)...</span>
+              <span class="scan-count-badge" id="radarFoundCountBadge">0 Devices Online</span>
+            </div>
+            <div class="scan-progress-bar">
+              <div class="scan-progress-fill" id="radarScanProgressFill"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Discovered Devices List in Modal -->
+        <div class="scanner-devices-wrap">
+          <div class="scanner-devices-header">
+            <span class="devices-header-title">Discovered Nearby Devices</span>
+            <div class="devices-header-actions">
+              <button class="btn-rescan-sm" id="btnModalRescan">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                <span>Rescan</span>
+              </button>
+              <button class="btn-demo-device-sm" id="btnModalAddDemo" title="Add virtual device for testing">
+                <span>+ Add Demo Device</span>
+              </button>
+            </div>
+          </div>
+          <div class="scanner-devices-list" id="scannerDiscoveredDevicesList">
+            <!-- Dynamically populated or skeleton -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Content 2: Camera QR Scanner -->
+      <div class="scanner-tab-panel" id="panelCameraQr" style="display: none;">
+        <div class="camera-scanner-wrapper">
+          <div class="camera-viewfinder-container">
+            <video id="qrScannerVideo" playsinline autoplay muted></video>
+            <canvas id="qrScannerCanvas" style="display: none;"></canvas>
+            
+            <!-- Viewfinder Overlay -->
+            <div class="viewfinder-overlay">
+              <div class="viewfinder-box">
+                <div class="corner-bracket top-left"></div>
+                <div class="corner-bracket top-right"></div>
+                <div class="corner-bracket bottom-left"></div>
+                <div class="corner-bracket bottom-right"></div>
+                <div class="laser-scanner-line"></div>
+              </div>
+            </div>
+
+            <div class="camera-controls-floating">
+              <button class="btn-cam-ctrl" id="btnFlipCamera" title="Switch Camera">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="camera-hint-box">
+            <div class="hint-icon">🎯</div>
+            <div class="hint-text">
+              <strong>Point camera at a LocalDrop QR Code</strong>
+              <p>Scan the code shown on another phone, laptop, or TV to pair instantly.</p>
+            </div>
+          </div>
+          <button class="btn-start-camera" id="btnStartCamera">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            <span>Start Camera Scanner</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab Content 3: My Device QR Code -->
+      <div class="scanner-tab-panel" id="panelMyQr" style="display: none;">
+        <div class="my-qr-wrapper">
+          <div class="qr-card-center">
+            <div class="qr-canvas-box">
+              <canvas id="myDeviceQrCanvas" width="220" height="220"></canvas>
+            </div>
+            <div class="qr-device-badge">
+              <span class="qr-device-avatar" id="myQrAvatar">💻</span>
+              <div>
+                <h4 class="qr-device-name" id="myQrDeviceName">Abhijeet's Laptop</h4>
+                <p class="qr-device-url" id="myQrUrlText">http://192.168.0.103:5173</p>
+              </div>
+            </div>
+          </div>
+          <div class="qr-instructions-card">
+            <div class="qr-step">
+              <span class="step-num">1</span>
+              <span>Open the Camera app on your iPhone, Android, or tablet</span>
+            </div>
+            <div class="qr-step">
+              <span class="step-num">2</span>
+              <span>Point at this QR code — tap the link to join instantly</span>
+            </div>
+            <div class="qr-step">
+              <span class="step-num">3</span>
+              <span>Both devices will discover each other over local Wi-Fi!</span>
+            </div>
+          </div>
+          <div class="qr-actions-row">
+            <button class="btn-copy-link" id="btnCopyLanLink">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+              <span>Copy Link</span>
+            </button>
+            <a class="btn-open-new-tab" id="btnOpenLocalTab" href="#" target="_blank">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              <span>Open Test Peer in New Tab</span>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Content 4: Manual IP / Direct Connect -->
+      <div class="scanner-tab-panel" id="panelManualIp" style="display: none;">
+        <div class="manual-ip-wrapper">
+          <div class="manual-ip-card">
+            <h4 class="manual-heading">Connect Directly by IP Address</h4>
+            <p class="manual-sub">Use this if your router isolates Wi-Fi clients or when connecting to an Android emulator.</p>
+            
+            <div class="ip-input-group">
+              <label class="ip-label" for="inputPeerIp">Device LAN IP & Port:</label>
+              <div class="ip-input-row">
+                <input type="text" id="inputPeerIp" class="ip-text-input" placeholder="192.168.0.105:5173" value="192.168.0.">
+                <button class="btn-ping-connect" id="btnPingConnectPeer">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                  <span>Connect</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="quick-ip-presets">
+              <span class="preset-label">Quick Presets:</span>
+              <button class="btn-ip-preset" data-ip="10.0.2.2:5173" data-name="Android Emulator" data-type="phone">📱 Android Emulator (10.0.2.2:5173)</button>
+              <button class="btn-ip-preset" data-ip="192.168.0.105:5173" data-name="Living Room TV" data-type="tv">📺 Living Room TV (192.168.0.105:5173)</button>
+              <button class="btn-ip-preset" data-ip="192.168.0.110:5173" data-name="iPhone 16 Pro" data-type="phone">📱 iPhone 16 Pro (192.168.0.110:5173)</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </aside>
 

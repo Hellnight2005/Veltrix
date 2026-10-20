@@ -31,7 +31,7 @@ LocalDrop delivers two dedicated, complementary workspaces with seamless one-tap
 ### 2. 🎬 Video Stream (AirDrop Cinema & Stream Handoff)
 *Stream high-definition movies directly from your phone or laptop storage to any TV or screen client in `<200ms` with exact frame resume, on-screen Cinema HUD controls, and strict single-audio routing.*
 
-| Desktop Cinema & Dual-View Simulation | Mobile Phone Controller |
+| Desktop Widescreen Cinema Player | Native Mobile Remote Controller |
 | :---: | :---: |
 | ![Desktop Video Stream](docs/assets/screenshots/desktop_video_stream.png) | ![Mobile Phone Controller](docs/assets/screenshots/mobile_phone_controller.png) |
 
@@ -72,6 +72,18 @@ That single realization transformed LocalDrop from a standard file transfer tool
 
 Download the production-ready standalone native Android APK (**LocalDrop v1.0**):
 * 📦 **[Download LocalDrop-v1.0-debug.apk](releases/LocalDrop-v1.0-debug.apk)** *(Size: 4.1 MB)*
+
+---
+
+## 🎨 Design Engineering & Micro-Interactions
+
+LocalDrop's UI craft, tactile feedback, and fluid physical motion are guided by Emil Kowalski's Design Engineering philosophy and Apple design principles. To add these agentic design skills to your workspace:
+
+```bash
+npx skills add emilkowalski/skill
+```
+
+This installs 15 craft skills (including `emil-design-eng`, `apple-design`, `animate`, `improve-animations`, and `animation-performance`).
 
 ---
 

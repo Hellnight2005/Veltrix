@@ -33,28 +33,22 @@ async fn run_transfer(file_size_bytes: usize, chunk_size: u32) -> Result<(), Loc
     let server_task = tokio::spawn(async move {
         let (mut stream, _) = listener.accept().await.unwrap();
         let _session =
-            server_handshake(&mut stream, Uuid::new_v4(), "Server", "test_os", chunk_size)
-                .await?;
+            server_handshake(&mut stream, Uuid::new_v4(), "Server", "test_os", chunk_size).await?;
         receive_file_stream::<_, fn(u64, u64, f64)>(&mut stream, &dst_dir_clone, None).await
     });
 
     let client_task = tokio::spawn(async move {
         let mut stream = connect_to_peer(&server_target).await?;
         let session =
-            client_handshake(&mut stream, Uuid::new_v4(), "Client", "test_os", chunk_size)
-                .await?;
-        send_file_stream::<_, fn(_)>(
-            &mut stream,
-            &src_file,
-            session.negotiated_chunk_size,
-            None,
-        )
-        .await
+            client_handshake(&mut stream, Uuid::new_v4(), "Client", "test_os", chunk_size).await?;
+        send_file_stream::<_, fn(_)>(&mut stream, &src_file, session.negotiated_chunk_size, None)
+            .await
     });
 
     let (client_res, server_res) = tokio::join!(client_task, server_task);
     client_res.map_err(|e| LocalDropError::StorageReadFailed(e.to_string()))??;
-    let received_info = server_res.map_err(|e| LocalDropError::StorageReadFailed(e.to_string()))??;
+    let received_info =
+        server_res.map_err(|e| LocalDropError::StorageReadFailed(e.to_string()))??;
 
     assert_eq!(received_info.file_size, file_size_bytes as u64);
     assert_eq!(received_info.file_sha256, expected_hash);
@@ -217,7 +211,10 @@ async fn test_disconnect_after_all_chunks_before_complete() {
     client_res.unwrap();
     let server_result = server_res.unwrap();
 
-    assert!(server_result.is_err(), "Server should have detected disconnection");
+    assert!(
+        server_result.is_err(),
+        "Server should have detected disconnection"
+    );
 
     // CRITICAL: Partial file must be deleted when sender disconnects before complete!
     let entries: Vec<_> = fs::read_dir(&dst_dir).unwrap().collect();
@@ -289,7 +286,10 @@ async fn test_reject_mismatched_file_size() {
     );
 
     let entries: Vec<_> = fs::read_dir(&dst_dir).unwrap().collect();
-    assert!(entries.is_empty(), "Partial file leaked after size mismatch!");
+    assert!(
+        entries.is_empty(),
+        "Partial file leaked after size mismatch!"
+    );
 }
 
 #[tokio::test]
@@ -347,7 +347,10 @@ async fn test_reject_truncated_chunk_payload() {
     );
 
     let entries: Vec<_> = fs::read_dir(&dst_dir).unwrap().collect();
-    assert!(entries.is_empty(), "Partial file leaked after truncated chunk!");
+    assert!(
+        entries.is_empty(),
+        "Partial file leaked after truncated chunk!"
+    );
 }
 
 // =========================================================================
@@ -549,7 +552,10 @@ async fn test_tampered_chunk_offset_rejected() {
 
     let (_, server_res) = tokio::join!(client_task, server_task);
     let server_result = server_res.unwrap();
-    assert!(server_result.is_err(), "Server must reject tampered chunk offset");
+    assert!(
+        server_result.is_err(),
+        "Server must reject tampered chunk offset"
+    );
 }
 
 #[tokio::test]

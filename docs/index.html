@@ -203,12 +203,16 @@
       padding: 14px 28px;
       border-radius: 12px;
       text-decoration: none;
-      transition: all 0.25s ease;
+      transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 180ms ease;
       box-shadow: 0 8px 25px rgba(99, 102, 241, 0.45);
     }
     .btn-hero-primary:hover {
       transform: translateY(-2px);
       box-shadow: 0 12px 35px rgba(99, 102, 241, 0.65);
+    }
+    .btn-hero-primary:active {
+      transform: scale(0.97);
+      transition: transform 80ms ease-out;
     }
     .btn-hero-ghost {
       display: inline-flex;
@@ -222,11 +226,16 @@
       padding: 14px 24px;
       border-radius: 12px;
       text-decoration: none;
-      transition: all 0.2s;
+      transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), background 180ms ease, border-color 180ms ease;
     }
     .btn-hero-ghost:hover {
       background: rgba(255, 255, 255, 0.1);
       border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-1px);
+    }
+    .btn-hero-ghost:active {
+      transform: scale(0.97);
+      transition: transform 80ms ease-out;
     }
 
     /* Metric Badges Row */
@@ -302,11 +311,16 @@
       font-size: 14px;
       font-weight: 700;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), background 180ms ease, color 180ms ease, box-shadow 180ms ease;
     }
     .showcase-tab:hover {
       color: #fff;
       background: rgba(255, 255, 255, 0.08);
+      transform: translateY(-1px);
+    }
+    .showcase-tab:active {
+      transform: scale(0.97);
+      transition: transform 80ms ease-out;
     }
     .showcase-tab.active {
       background: linear-gradient(135deg, #6366f1, #4f46e5);
@@ -317,13 +331,13 @@
 
     .showcase-panel {
       display: none;
-      animation: fadeIn 0.3s ease-out;
+      animation: tabEnter 240ms cubic-bezier(0.16, 1, 0.3, 1);
     }
     .showcase-panel.active { display: block; }
 
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(8px); }
-      to { opacity: 1; transform: translateY(0); }
+    @keyframes tabEnter {
+      from { opacity: 0; transform: translateY(6px) scale(0.99); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
     }
 
     /* Screenshot Card */
@@ -722,15 +736,15 @@
   <!-- Interactive Product Showcase Section -->
   <section class="showcase-section" id="showcase">
     <div class="section-header">
-      <h2 class="section-title">Experience the Dual Architecture</h2>
-      <p class="section-sub">Two distinct, fully realized modes engineered for speed, convenience, and continuity.</p>
+      <h2 class="section-title">Experience the Native Architecture</h2>
+      <p class="section-sub">Widescreen Living Room Cinema Player for laptops & TVs, and an edge-to-edge remote controller for mobile phones.</p>
     </div>
 
     <!-- Mode Tabs -->
     <div class="showcase-nav-tabs">
       <button class="showcase-tab active" onclick="switchTab('files')">📁 Send Files (P2P AirDrop)</button>
-      <button class="showcase-tab" onclick="switchTab('cinema')">🎬 Video Stream (AirDrop Cinema)</button>
-      <button class="showcase-tab" onclick="switchTab('mobile')">📱 Mobile App Interface</button>
+      <button class="showcase-tab" onclick="switchTab('cinema')">🎬 Video Stream (Cinema Player)</button>
+      <button class="showcase-tab" onclick="switchTab('mobile')">📱 Mobile Remote Controller</button>
       <button class="showcase-tab" onclick="switchTab('engine')">🦀 Rust Core Engine</button>
     </div>
 
@@ -766,9 +780,9 @@
     <!-- Panel 2: Video Cinema -->
     <div class="showcase-panel" id="panel-cinema">
       <div class="screenshot-card">
-        <img src="assets/screenshots/desktop_video_stream.png" alt="Desktop Video Stream Dual View">
+        <img src="assets/screenshots/desktop_video_stream.png" alt="Desktop Video Stream Cinema Player">
         <div class="screenshot-caption">
-          <span><strong>AirDrop Cinema Dual View</strong>: Phone media server streaming to TV Screen client with instant switch handoff.</span>
+          <span><strong>AirDrop Cinema Widescreen Player</strong>: Full 1400px widescreen TV playback with instant zero-wait range streaming and remote handoff.</span>
           <span style="color: #38bdf8;">● HTTP 206 Partial Content Stream</span>
         </div>
       </div>
@@ -1068,7 +1082,7 @@ cd apps/localdrop_web<br>
 npm install<br>
 npm run dev
         </div>
-        <p class="feature-desc">Open <code>http://localhost:5173/</code> for Dual View, or append <code>?feature=files</code> for the P2P transfer workspace.</p>
+        <p class="feature-desc">Open <code>http://localhost:5173/</code> for Widescreen Cinema Player, or switch to Mobile Remote on phone view.</p>
       </div>
 
       <div class="feature-card">
@@ -1077,6 +1091,14 @@ npm run dev
 cargo run --release -p localdrop_cli -- receive --port 8080 --out ./inbox
         </div>
         <p class="feature-desc">Starts high-performance TCP receiver daemon on port 8080 with streaming SHA-256 integrity verification.</p>
+      </div>
+
+      <div class="feature-card">
+        <h4 style="font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 8px;">🎨 Design Engineering Skills</h4>
+        <div class="code-box">
+npx skills add emilkowalski/skill
+        </div>
+        <p class="feature-desc">Installs Emil Kowalski's 15 design engineering & animation skills for building interfaces that feel right.</p>
       </div>
     </div>
 
